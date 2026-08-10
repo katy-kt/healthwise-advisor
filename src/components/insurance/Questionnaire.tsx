@@ -4,6 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Sparkles, Loader2 } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -155,19 +156,23 @@ export function Questionnaire({
         <div className="mt-6 space-y-6">
           {step === 0 && (
             <>
-              <Field label={`年齡：${answers.age} 歲`}>
-                <div className="flex items-center gap-4">
-                  <Slider
-                    value={[answers.age]}
-                    min={18}
-                    max={80}
-                    step={1}
-                    onValueChange={(v) => patch({ age: v[0] })}
-                    className="flex-1"
-                  />
-                  <div className="w-20 text-center rounded-lg border border-border bg-background py-2 font-semibold text-primary">
-                    {answers.age}
+              <Field label="年齡">
+                <div className="max-w-xs">
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="number"
+                      min={18}
+                      max={80}
+                      value={answers.age}
+                      onChange={(e) => patch({ age: Number(e.target.value) })}
+                      className="h-11 text-base font-semibold text-primary"
+                      aria-label="年齡"
+                    />
+                    <span className="text-sm text-muted-foreground shrink-0">歲</span>
                   </div>
+                  {(answers.age < 18 || answers.age > 80 || Number.isNaN(answers.age)) && (
+                    <p className="mt-2 text-xs text-destructive">請輸入 18 – 80 之間的年齡</p>
+                  )}
                 </div>
               </Field>
               <Field label="性別">
@@ -268,14 +273,14 @@ export function Questionnaire({
                   </div>
                   <Slider
                     value={[answers.budget]}
-                    min={500}
+                    min={2000}
                     max={30000}
                     step={100}
                     onValueChange={(v) => patch({ budget: v[0] })}
                     className="mt-5"
                   />
                   <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                    <span>NT$500</span>
+                    <span>NT$2,000</span>
                     <span>NT$30,000</span>
                   </div>
                 </div>

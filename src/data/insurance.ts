@@ -8,6 +8,8 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { POLICY_DETAILS } from "./policy-details";
+
 export type Gender = "male" | "female";
 export type DiseaseKey = "cancer" | "cardio" | "accident" | "surgery";
 
@@ -26,6 +28,45 @@ export interface Policy {
   payoutRatio: string;
   payoutStandard: "guaranteed" | "conditional" | "consult";
   flagged?: { source: string; note: string };
+  /* ---- extended (optional) detail fields for the comparison matrix ---- */
+  approvalNumber?: string;
+  status?: string;
+  premiumRange?: string;
+  paymentPeriod?: string;
+  coveragePeriod?: string;
+  mainOrRider?: string;
+  requiresMainPolicy?: string;
+  covers?: string[];
+  payoutItems?: string[];
+  exclusions?: string[];
+  policyType?: string;
+  attentionPoints?: string[];
+  plainSummary?: string;
+  claimRequirements?: string;
+  entryAge?: string;
+  waitingPeriod?: string;
+  coolingOffPeriod?: string;
+  renewalRule?: string;
+  maxRenewalAge?: string;
+  occupationRestrictions?: string;
+  healthRestrictions?: string;
+  payoutLimit?: string;
+  payoutMethod?: string;
+  isReimbursement?: string;
+  receiptType?: string;
+  surgeryBenefit?: string;
+  hospitalBenefit?: string;
+  outpatientBenefit?: string;
+  otherPayoutConditions?: string;
+  pros?: string[];
+  cons?: string[];
+  suitableFor?: string;
+  notSuitableFor?: string;
+  policyDocumentUrl?: string;
+  productDocumentUrl?: string;
+  officialProductUrl?: string;
+  dataSource?: string;
+  lastUpdated?: string;
 }
 
 export const MAX_COMPARE = 8;
@@ -206,6 +247,12 @@ export const MOCK_POLICIES: Policy[] = [
     },
   },
 ];
+
+// Merge the extended (mock) detail fields into the existing policy objects so the
+// detailed comparison matrix is immediately usable without duplicating the model.
+for (const p of MOCK_POLICIES) {
+  Object.assign(p, POLICY_DETAILS[p.id] ?? {});
+}
 
 export const PAYOUT_META: Record<
   Policy["payoutStandard"],
@@ -448,3 +495,328 @@ export const PLANS: Plan[] = [
 
 export const planMonthly = (plan: Plan) =>
   plan.items.reduce((s, i) => s + i.monthly, 0);
+
+/* ---------------- Budget-aware personalized plan generation ---------------- */
+
+interface Candidate {
+  policyId: string;
+  categoryLabel: string;
+  monthly: number;
+  /** lower = more essential */
+  priority: number;
+  risks: string[];
+  reason: (a: Answers) => string;
+}
+
+const identityPhrase = (a: Answers) =>
+  a.identity === "學生"
+    ? "學生族群"
+    : a.identity === "已婚有小孩"
+      ? "有小孩的家庭"
+      : a.identity;
+
+const hasNoInsurance = (a: Answers) =>
+  a.existing.length === 0 || a.existing.includes("完全沒有") || a.existing.includes("不確定");
+
+const CANDIDATES: Candidate[] = [
+  {
+    policyId: "p6",
+    categoryLabel: "實支實付醫療險",
+    monthly: 680,
+    priority: 1,
+    risks: ["住院醫療花費", "重大疾病"],
+    reason: (a) =>
+      `${hasNoInsurance(a) ? "您目前尚無醫療保障" : "您現有保障中缺少足額的雜費實支"}，而住院時的自費醫材與病房差額往往是最大支出，因此優先補足可副本理賠的實支實付，並保留三擇一的理賠彈性。`,
+  },
+  {
+    policyId: "p7",
+    categoryLabel: "意外醫療險",
+    monthly: 300,
+    priority: 2,
+    risks: ["意外受傷"],
+    reason: (a) =>
+      `${identityPhrase(a)}日常通勤與運動受傷比例高，這張附約保費最低但能覆蓋意外門診與骨折未住院，用很小的預算把最常見的小額風險先補上。`,
+  },
+  {
+    policyId: "p3",
+    categoryLabel: "意外傷害險",
+    monthly: 350,
+    priority: 3,
+    risks: ["意外受傷", "身故後家人生活"],
+    reason: (a) =>
+      `您把「意外受傷」列為主要擔心風險${a.dependents === "沒有" ? "" : "，且家中有需要扶養的人"}，本張含意外身故與失能一次金並提供交通事故加倍給付。`,
+  },
+  {
+    policyId: "p8",
+    categoryLabel: "一年期癌症醫療險",
+    monthly: 420,
+    priority: 3,
+    risks: ["重大疾病"],
+    reason: (a) =>
+      `您最擔心重大疾病，而 ${a.age} 歲的一年期癌症險費率仍低，可用有限預算先取得癌症住院與手術保障，未來預算提高再轉換終身型。`,
+  },
+  {
+    policyId: "p1",
+    categoryLabel: "第二張實支實付（雙實付）",
+    monthly: 760,
+    priority: 4,
+    risks: ["住院醫療花費", "重大疾病"],
+    reason: () =>
+      `單張實支的雜費上限常不足以支付高階醫材，第二張實支可把額度疊加到 NT$380,000 等級，形成雙實付結構，重大手術時自付額幾乎歸零。`,
+  },
+  {
+    policyId: "p9",
+    categoryLabel: "手術醫療險",
+    monthly: 520,
+    priority: 5,
+    risks: ["住院醫療花費"],
+    reason: () =>
+      `涵蓋 2000+ 手術項目且門診手術也給付，補上「不用住院但要開刀」這段最容易被忽略的缺口。`,
+  },
+  {
+    policyId: "p10",
+    categoryLabel: "住院日額醫療險（平價）",
+    monthly: 600,
+    priority: 5,
+    risks: ["住院醫療花費"],
+    reason: (a) =>
+      `以較低保費補上住院期間的生活雜支與收入缺口，與實支實付互補；符合您「${a.preference.replace(/^[^\u4e00-\u9fa5]+/, "")}」的偏好。`,
+  },
+  {
+    policyId: "p4",
+    categoryLabel: "住院日額醫療險（ICU 加倍）",
+    monthly: 640,
+    priority: 6,
+    risks: ["住院醫療花費", "長期照護"],
+    reason: () =>
+      `住院日額給付且加護病房加倍，並保證續保，適合把長天期住院的收入損失一起補起來。`,
+  },
+  {
+    policyId: "p2",
+    categoryLabel: "終身癌症險",
+    monthly: 1180,
+    priority: 6,
+    risks: ["重大疾病"],
+    reason: () =>
+      `癌症治療期長、標靶自費高，初次罹癌一次金加上療程給付可支撐長期療程與收入中斷，是預算足夠時的長期解法。`,
+  },
+  {
+    policyId: "p5",
+    categoryLabel: "重大傷病（心血管）",
+    monthly: 980,
+    priority: 7,
+    risks: ["重大疾病", "長期照護"],
+    reason: () =>
+      `補足心血管重大傷病一次金，涵蓋心導管與支架等高額手術費用；請留意本商品條款定義較嚴格。`,
+  },
+];
+
+const BUDGET_MIN = 2000;
+const BUDGET_MAX = 30000;
+
+export const BUDGET_RANGE = { min: BUDGET_MIN, max: BUDGET_MAX, step: 100 };
+
+const TIER_META: Record<PlanTier, { name: string; subtitle: string; ratio: number }> = {
+  lite: {
+    name: "精簡版",
+    subtitle: "優先補足最重要的基本保障，以較低保費守住主要風險。",
+    ratio: 0.55,
+  },
+  standard: {
+    name: "標準版",
+    subtitle: "在您的預算內，兼顧保障範圍與保費。",
+    ratio: 0.8,
+  },
+  full: {
+    name: "完整版",
+    subtitle: "在您的預算上限內，盡可能完整覆蓋重要風險。",
+    ratio: 0.98,
+  },
+};
+
+function scoreCandidate(c: Candidate, a: Answers) {
+  let score = c.priority;
+  if (c.risks.some((r) => a.risks.includes(r))) score -= 1.5;
+  if (a.preference.includes("保費便宜")) score += c.monthly / 600;
+  if (a.preference.includes("保障完整")) score -= c.monthly / 1600;
+  // avoid duplicating what the user already owns
+  const owned: Record<string, string> = {
+    實支實付: "實支實付",
+    癌症險: "癌症",
+    意外險: "意外",
+    重大傷病: "重大傷病",
+  };
+  for (const [key, needle] of Object.entries(owned)) {
+    if (a.existing.includes(key) && c.categoryLabel.includes(needle)) score += 2.5;
+  }
+  return score;
+}
+
+function buildPlan(tier: PlanTier, a: Answers): Plan {
+  const meta = TIER_META[tier];
+  const cap = Math.floor(a.budget * meta.ratio);
+  const ranked = [...CANDIDATES].sort((x, y) => scoreCandidate(x, a) - scoreCandidate(y, a));
+
+  const picked: Candidate[] = [];
+  let total = 0;
+  for (const c of ranked) {
+    if (picked.length >= MAX_COMPARE) break;
+    if (total + c.monthly > cap) continue;
+    picked.push(c);
+    total += c.monthly;
+  }
+  if (picked.length === 0 && ranked.length > 0) {
+    // Never return an empty plan: keep the single cheapest option.
+    const cheapest = [...ranked].sort((x, y) => x.monthly - y.monthly)[0];
+    picked.push(cheapest);
+  }
+
+  return {
+    tier,
+    name: meta.name,
+    subtitle: meta.subtitle,
+    items: picked.map((c, i) => ({
+      policyId: c.policyId,
+      level: i < Math.max(1, Math.ceil(picked.length * 0.7)) ? "必備" : "建議",
+      categoryLabel: c.categoryLabel,
+      reason: c.reason(a),
+      monthly: c.monthly,
+    })),
+  };
+}
+
+/** Generates the three budget-compliant personalized plans from questionnaire answers. */
+export const buildPlans = (a: Answers): Plan[] =>
+  (["lite", "standard", "full"] as PlanTier[]).map((t) => buildPlan(t, a));
+
+/* ---------------- Detailed comparison matrix schema ---------------- */
+
+export type CellKind = "text" | "badges" | "list" | "payoutBadge" | "premium" | "links";
+
+export interface CompareRow {
+  id: string;
+  label: string;
+  sublabel?: string;
+  kind: CellKind;
+  get: (p: Policy) => string | string[] | undefined;
+}
+
+export interface CompareGroup {
+  id: string;
+  label: string;
+  rows: CompareRow[];
+}
+
+const t = (id: string, label: string, get: (p: Policy) => string | undefined): CompareRow => ({
+  id,
+  label,
+  kind: "text",
+  get,
+});
+const l = (id: string, label: string, get: (p: Policy) => string[] | undefined): CompareRow => ({
+  id,
+  label,
+  kind: "list",
+  get,
+});
+
+export const COMPARE_GROUPS: CompareGroup[] = [
+  {
+    id: "basic",
+    label: "基本資訊",
+    rows: [
+      t("company", "保險公司", (p) => `${p.company}（${p.companyEn}）`),
+      t("name", "商品名稱", (p) => p.policyName),
+      t("code", "商品代碼", (p) => p.code),
+      t("category", "險種", (p) => `${p.category} · ${p.medicalType}`),
+      t("status", "商品狀態", (p) => p.status),
+      t("approval", "核准 / 核備 / 備查文號", (p) => p.approvalNumber),
+    ],
+  },
+  {
+    id: "premium",
+    label: "保費與繳費",
+    rows: [
+      { id: "premium", label: "預估保費", kind: "premium", get: (p) => String(p.premium) },
+      t("premiumRange", "保費範圍", (p) => p.premiumRange),
+      t("paymentPeriod", "繳費年期", (p) => p.paymentPeriod),
+      t("coveragePeriod", "保障期間", (p) => p.coveragePeriod),
+      t("mainOrRider", "主約 / 附約", (p) => p.mainOrRider),
+      t("requiresMain", "是否需要搭配主約", (p) => p.requiresMainPolicy),
+    ],
+  },
+  {
+    id: "coverage",
+    label: "先看懂保障",
+    rows: [
+      { id: "covers", label: "保什麼", kind: "badges", get: (p) => p.covers ?? p.tags },
+      l("payoutItems", "賠什麼", (p) => p.payoutItems),
+      l("exclusions", "不賠什麼", (p) => p.exclusions),
+      t("policyType", "條款類型", (p) => p.policyType),
+      l("attention", "先注意", (p) => p.attentionPoints),
+      t("plainSummary", "白話摘要", (p) => p.plainSummary),
+      t("claimRequirements", "怎麼才會賠", (p) => p.claimRequirements),
+    ],
+  },
+  {
+    id: "conditions",
+    label: "投保條件",
+    rows: [
+      t("entryAge", "投保年齡", (p) => p.entryAge),
+      t("waitingPeriod", "等待期", (p) => p.waitingPeriod),
+      t("coolingOff", "猶豫期", (p) => p.coolingOffPeriod),
+      t("renewalRule", "續保規則", (p) => p.renewalRule),
+      t("maxRenewalAge", "最高續保年齡", (p) => p.maxRenewalAge),
+      t("occupation", "職業限制", (p) => p.occupationRestrictions),
+      t("health", "健康告知 / 投保限制", (p) => p.healthRestrictions),
+    ],
+  },
+  {
+    id: "claims",
+    label: "理賠與給付",
+    rows: [
+      { id: "payoutStandard", label: "理賠標準", kind: "payoutBadge", get: (p) => p.payoutStandard },
+      t("payoutAmount", "理賠金額 / 給付上限", (p) => `${p.payoutAmount}｜${p.payoutLimit ?? "—"}`),
+      t("payoutRatio", "賠償比例", (p) => p.payoutRatio),
+      t("payoutMethod", "給付方式", (p) => p.payoutMethod),
+      t("isReimbursement", "是否實支實付", (p) => p.isReimbursement),
+      t("receiptType", "正本 / 副本理賠", (p) => p.receiptType),
+      t("surgery", "手術給付", (p) => p.surgeryBenefit),
+      t("hospital", "住院給付", (p) => p.hospitalBenefit),
+      t("outpatient", "門診給付", (p) => p.outpatientBenefit),
+      t("otherPayout", "其他重要給付條件", (p) => p.otherPayoutConditions),
+    ],
+  },
+  {
+    id: "review",
+    label: "白話評價",
+    rows: [
+      l("pros", "優點", (p) => p.pros),
+      l("cons", "缺點", (p) => p.cons),
+      t("suitableFor", "適合對象", (p) => p.suitableFor),
+      t("notSuitableFor", "可能不適合對象", (p) => p.notSuitableFor),
+    ],
+  },
+  {
+    id: "docs",
+    label: "文件與來源",
+    rows: [
+      { id: "terms", label: "保單條款", kind: "links", get: (p) => p.policyDocumentUrl },
+      { id: "brochure", label: "商品文件", kind: "links", get: (p) => p.productDocumentUrl },
+      { id: "official", label: "官方商品頁", kind: "links", get: (p) => p.officialProductUrl },
+      t("dataSource", "資料來源", (p) => p.dataSource),
+      t("lastUpdated", "最後更新時間", (p) => p.lastUpdated),
+    ],
+  },
+];
+
+export const rowValues = (row: CompareRow, policies: Policy[]) =>
+  policies.map((p) => {
+    const v = row.get(p);
+    return Array.isArray(v) ? v.join("｜") : (v ?? "—");
+  });
+
+export const rowIsIdentical = (row: CompareRow, policies: Policy[]) => {
+  const vals = rowValues(row, policies);
+  return vals.every((v) => v === vals[0]);
+};
