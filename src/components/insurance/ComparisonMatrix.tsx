@@ -160,7 +160,9 @@ export function ComparisonMatrix({
   const download = () => {
     const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
     const lines: string[] = [];
-    lines.push(["比較維度", ...policies.map((p) => `${p.company} ${p.policyName}`)].map(esc).join(","));
+    lines.push(
+      ["比較維度", ...policies.map((p) => `${p.company} ${p.policyName}`)].map(esc).join(","),
+    );
     for (const g of COMPARE_GROUPS) {
       lines.push([`【${g.label}】`, ...policies.map(() => "")].map(esc).join(","));
       for (const r of g.rows) {
@@ -239,7 +241,10 @@ export function ComparisonMatrix({
                           {p.flagged && (
                             <Popover>
                               <PopoverTrigger asChild>
-                                <button aria-label="社群風評來源" className="cursor-pointer shrink-0">
+                                <button
+                                  aria-label="社群風評來源"
+                                  className="cursor-pointer shrink-0"
+                                >
                                   <span className="text-warning">⚠️</span>
                                 </button>
                               </PopoverTrigger>

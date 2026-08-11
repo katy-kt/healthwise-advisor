@@ -275,7 +275,11 @@ export function AiAssistant({
             深度：{DEPTH_LABEL[preference.depth]}
           </Badge>
           {preference.focus.map((f) => (
-            <Badge key={f} variant="outline" className={cn("text-[11px]", "border-teal/40 text-teal")}>
+            <Badge
+              key={f}
+              variant="outline"
+              className={cn("text-[11px]", "border-teal/40 text-teal")}
+            >
               關注：{f}
             </Badge>
           ))}
@@ -307,12 +311,7 @@ export function AiAssistant({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="sr-only"
-          aria-label="關閉"
-        >
+        <button type="button" onClick={() => setOpen(false)} className="sr-only" aria-label="關閉">
           <X className="h-4 w-4" />
         </button>
       </div>

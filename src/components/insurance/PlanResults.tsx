@@ -4,13 +4,7 @@ import { CheckCircle2, Layers, Scale, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  type Plan,
-  type PlanTier,
-  PLANS,
-  planMonthly,
-  policyById,
-} from "@/data/insurance";
+import { type Plan, type PlanTier, PLANS, planMonthly, policyById } from "@/data/insurance";
 
 function PlanCard({ plan, onCompare }: { plan: Plan; onCompare: (p: Plan) => void }) {
   const monthly = planMonthly(plan);
