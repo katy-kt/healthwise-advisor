@@ -319,6 +319,12 @@ function Index() {
           <div className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> 為大學生 & 新鮮人設計</div>
         </div>
       </footer>
+
+      <AiAssistant
+        answers={answers}
+        selectedPolicies={selectedPolicies}
+        onViewDifference={viewDifference}
+      />
     </div>
   );
 }
