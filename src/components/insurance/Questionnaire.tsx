@@ -177,7 +177,10 @@ export function Questionnaire({
               </Field>
               <Field label="性別">
                 <div className="grid grid-cols-2 gap-3 max-w-sm">
-                  <Pill active={answers.gender === "male"} onClick={() => patch({ gender: "male" })}>
+                  <Pill
+                    active={answers.gender === "male"}
+                    onClick={() => patch({ gender: "male" })}
+                  >
                     男性
                   </Pill>
                   <Pill
@@ -196,7 +199,11 @@ export function Questionnaire({
               <Field label="身份">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {IDENTITIES.map((i) => (
-                    <Pill key={i} active={answers.identity === i} onClick={() => patch({ identity: i })}>
+                    <Pill
+                      key={i}
+                      active={answers.identity === i}
+                      onClick={() => patch({ identity: i })}
+                    >
                       {i}
                     </Pill>
                   ))}
@@ -205,7 +212,11 @@ export function Questionnaire({
               <Field label="家庭年收入（稅前）">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {INCOMES.map((i) => (
-                    <Pill key={i} active={answers.income === i} onClick={() => patch({ income: i })}>
+                    <Pill
+                      key={i}
+                      active={answers.income === i}
+                      onClick={() => patch({ income: i })}
+                    >
                       {i}
                     </Pill>
                   ))}
@@ -229,7 +240,11 @@ export function Questionnaire({
                 <Field label="是否有房貸？">
                   <div className="grid grid-cols-2 gap-3">
                     {["有房貸", "沒有"].map((o) => (
-                      <Pill key={o} active={answers.mortgage === o} onClick={() => patch({ mortgage: o })}>
+                      <Pill
+                        key={o}
+                        active={answers.mortgage === o}
+                        onClick={() => patch({ mortgage: o })}
+                      >
                         {o}
                       </Pill>
                     ))}
@@ -257,7 +272,11 @@ export function Questionnaire({
               <Field label="目前已有哪些保險？（可多選）">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {EXISTING.map((e) => (
-                    <Pill key={e} active={answers.existing.includes(e)} onClick={() => toggleExisting(e)}>
+                    <Pill
+                      key={e}
+                      active={answers.existing.includes(e)}
+                      onClick={() => toggleExisting(e)}
+                    >
                       {e}
                     </Pill>
                   ))}
@@ -266,7 +285,8 @@ export function Questionnaire({
               <Field label="每月保險預算">
                 <div className="rounded-xl border border-border bg-background/60 p-5">
                   <div className="text-3xl font-bold text-primary">
-                    NT${answers.budget.toLocaleString()} <span className="text-base font-medium text-muted-foreground">元/月</span>
+                    NT${answers.budget.toLocaleString()}{" "}
+                    <span className="text-base font-medium text-muted-foreground">元/月</span>
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
                     年繳約 NT${(answers.budget * 12).toLocaleString()}
@@ -293,7 +313,11 @@ export function Questionnaire({
               <Field label="保險偏好">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {PREFERENCES.map((p) => (
-                    <Pill key={p} active={answers.preference === p} onClick={() => patch({ preference: p })}>
+                    <Pill
+                      key={p}
+                      active={answers.preference === p}
+                      onClick={() => patch({ preference: p })}
+                    >
                       {p}
                     </Pill>
                   ))}
@@ -302,7 +326,11 @@ export function Questionnaire({
               <Field label="保單資訊呈現偏好">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {INFO_STYLES.map((p) => (
-                    <Pill key={p} active={answers.infoStyle === p} onClick={() => patch({ infoStyle: p })}>
+                    <Pill
+                      key={p}
+                      active={answers.infoStyle === p}
+                      onClick={() => patch({ infoStyle: p })}
+                    >
                       {p}
                     </Pill>
                   ))}

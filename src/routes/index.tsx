@@ -1,17 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  Shield,
-  Sparkles,
-  Info,
-  AlertTriangle,
-  CheckCircle2,
-  TrendingUp,
-  Activity,
-  Users,
-  ListChecks,
-} from "lucide-react";
+import { Shield, Sparkles, Info, CheckCircle2, TrendingUp, Activity, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,25 +12,19 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 
 import { Questionnaire } from "@/components/insurance/Questionnaire";
 import { PlanResults } from "@/components/insurance/PlanResults";
+import { ComparisonMatrix } from "@/components/insurance/ComparisonMatrix";
+import { AiAssistant } from "@/components/insurance/AiAssistant";
 import {
   type Answers,
   type Gender,
   type Plan,
+  buildPlans,
   DEFAULT_ANSWERS,
   DISEASES,
   MAX_COMPARE,
@@ -64,17 +48,22 @@ function Index() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [highlightAnchor, setHighlightAnchor] = useState<{
+    anchor: string;
+    nonce: number;
+  } | null>(null);
+  const [plans, setPlans] = useState<Plan[]>(() => buildPlans(DEFAULT_ANSWERS));
 
   const gender: Gender = answers.gender;
   const age = String(answers.age);
-  const disease =
-    answers.risks.map((r) => RISK_TO_DISEASE[r]).find(Boolean) ?? "cancer";
+  const disease = answers.risks.map((r) => RISK_TO_DISEASE[r]).find(Boolean) ?? "cancer";
   const diseaseLabel = DISEASES.find((d) => d.value === disease)?.label ?? "";
 
   const handleGenerate = () => {
     setLoading(true);
     setSubmitted(false);
     setSelected([]);
+    setPlans(buildPlans(answers));
     setTimeout(() => {
       setLoading(false);
       setSubmitted(true);
@@ -102,10 +91,7 @@ function Index() {
   };
 
   const comparePlan = (plan: Plan) => {
-    const ids = Array.from(new Set(plan.items.map((i) => i.policyId))).slice(
-      0,
-      MAX_COMPARE,
-    );
+    const ids = Array.from(new Set(plan.items.map((i) => i.policyId))).slice(0, MAX_COMPARE);
     setSelected(ids);
     toast.success(`已載入「${plan.name}」的 ${ids.length} 張保單至比較表`);
     setTimeout(() => {
@@ -117,6 +103,10 @@ function Index() {
     () => MOCK_POLICIES.filter((p) => selected.includes(p.id)),
     [selected],
   );
+
+  const viewDifference = (anchor: string) => {
+    setHighlightAnchor({ anchor, nonce: Date.now() });
+  };
 
   const matchScore = useMemo(() => {
     const a = answers.age;
@@ -152,7 +142,10 @@ function Index() {
 
       {/* Hero + Questionnaire */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-[image:var(--gradient-hero)] opacity-[0.08]" aria-hidden />
+        <div
+          className="absolute inset-0 bg-[image:var(--gradient-hero)] opacity-[0.08]"
+          aria-hidden
+        />
         <div className="mx-auto max-w-7xl px-4 pt-12 pb-10 md:pt-20 md:pb-16 relative">
           <div className="grid lg:grid-cols-5 gap-8 items-start">
             <div className="lg:col-span-2 space-y-4">
@@ -160,16 +153,30 @@ function Index() {
                 Step 1 · 5 步問卷
               </Badge>
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground leading-tight">
-                找到<span className="bg-[image:var(--gradient-hero)] bg-clip-text text-transparent"> 真正適合你 </span>的保險組合
+                找到
+                <span className="bg-[image:var(--gradient-hero)] bg-clip-text text-transparent">
+                  {" "}
+                  真正適合你{" "}
+                </span>
+                的保險組合
               </h1>
               <p className="text-muted-foreground text-base leading-relaxed">
                 回答 5 個簡單步驟，AI 將依照您的身份、風險擔憂、現有保障與預算，
                 產出精簡／標準／完整三種個人化方案，並可一鍵帶入保單比較表。
               </p>
               <div className="flex flex-wrap gap-4 pt-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" />透明理賠標準</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" />雙實付智慧配對</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" />社群風評提示</div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                  透明理賠標準
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                  雙實付智慧配對
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                  社群風評提示
+                </div>
               </div>
             </div>
 
@@ -187,7 +194,10 @@ function Index() {
 
       {/* Results */}
       {submitted && (
-        <section id="results" className="mx-auto max-w-7xl px-4 pb-16 animate-in fade-in duration-500">
+        <section
+          id="results"
+          className="mx-auto max-w-7xl px-4 pb-16 animate-in fade-in duration-500"
+        >
           <Tabs defaultValue="plans" className="w-full">
             <TabsList className="grid w-full sm:w-auto sm:inline-grid grid-cols-3 mb-6">
               <TabsTrigger value="plans">
@@ -205,8 +215,12 @@ function Index() {
             </TabsList>
 
             <TabsContent value="plans" className="space-y-8">
-              <PlanResults onCompare={comparePlan} />
-              <ComparisonTable selectedPolicies={selectedPolicies} />
+              <PlanResults onCompare={comparePlan} plans={plans} budget={answers.budget} />
+              <ComparisonMatrix
+                policies={selectedPolicies}
+                onRemove={(id) => toggleSelect(id, false)}
+                highlightAnchor={highlightAnchor}
+              />
             </TabsContent>
 
             <TabsContent value="recommendations" className="space-y-6">
@@ -219,7 +233,8 @@ function Index() {
                   </p>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  已選擇 <span className="text-primary font-semibold">{selected.length}</span> / {MAX_COMPARE}
+                  已選擇 <span className="text-primary font-semibold">{selected.length}</span> /{" "}
+                  {MAX_COMPARE}
                 </div>
               </div>
 
@@ -232,7 +247,9 @@ function Index() {
                       key={p.id}
                       value={p.id}
                       className={`rounded-xl border bg-card px-4 md:px-5 transition-all ${
-                        isSel ? "border-primary ring-2 ring-primary/20 shadow-[var(--shadow-soft)]" : "border-border"
+                        isSel
+                          ? "border-primary ring-2 ring-primary/20 shadow-[var(--shadow-soft)]"
+                          : "border-border"
                       }`}
                     >
                       <div className="flex items-center gap-3 py-1">
@@ -253,10 +270,17 @@ function Index() {
                                 {p.company}
                                 {p.flagged && <span className="text-warning">⚠️</span>}
                               </div>
-                              <div className="text-sm text-muted-foreground truncate">{p.category}</div>
-                              <div className="text-sm text-muted-foreground truncate">{p.medicalType}</div>
+                              <div className="text-sm text-muted-foreground truncate">
+                                {p.category}
+                              </div>
+                              <div className="text-sm text-muted-foreground truncate">
+                                {p.medicalType}
+                              </div>
                               <div className="text-sm font-semibold text-primary">
-                                NT$ {p.premium.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">/年</span>
+                                NT$ {p.premium.toLocaleString()}{" "}
+                                <span className="text-xs font-normal text-muted-foreground">
+                                  /年
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -269,9 +293,13 @@ function Index() {
                               保單名稱 Policy Name
                             </div>
                             <div className="font-semibold text-foreground">{p.policyName}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">保單代號 {p.code}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              保單代號 {p.code}
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground leading-relaxed">{p.description}</p>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {p.description}
+                          </p>
                           <div className="flex flex-wrap gap-2 pt-1">
                             <Badge variant="outline" className={meta.className}>
                               <meta.icon className="h-3.5 w-3.5 mr-1" />
@@ -288,7 +316,11 @@ function Index() {
                 })}
               </Accordion>
 
-              <ComparisonTable selectedPolicies={selectedPolicies} />
+              <ComparisonMatrix
+                policies={selectedPolicies}
+                onRemove={(id) => toggleSelect(id, false)}
+                highlightAnchor={highlightAnchor}
+              />
             </TabsContent>
 
             <TabsContent value="dual">
@@ -306,148 +338,17 @@ function Index() {
       <footer className="border-t border-border/60 bg-card/50">
         <div className="mx-auto max-w-7xl px-4 py-6 text-xs text-muted-foreground flex flex-wrap gap-2 justify-between">
           <div>© 2026 InsureMatch AI · Demo 使用模擬資料</div>
-          <div className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> 為大學生 & 新鮮人設計</div>
+          <div className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" /> 為大學生 & 新鮮人設計
+          </div>
         </div>
       </footer>
-    </div>
-  );
-}
 
-function ComparisonTable({
-  selectedPolicies,
-}: {
-  selectedPolicies: typeof MOCK_POLICIES;
-}) {
-  if (selectedPolicies.length === 0) {
-    return (
-      <div
-        id="comparison"
-        className="mt-10 rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
-      >
-        <ListChecks className="h-5 w-5 mx-auto mb-2 text-muted-foreground" />
-        勾選保單或使用「一鍵比較此方案」，即可在此顯示保單比較表
-      </div>
-    );
-  }
-
-  return (
-    <div id="comparison" className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="flex items-end justify-between gap-3 mb-4 mt-10 flex-wrap">
-        <div>
-          <Badge className="bg-teal/15 text-teal border-teal/30 mb-2">Step 3 · 比較矩陣</Badge>
-          <h2 className="text-2xl font-bold tracking-tight">保單比較表</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            目前比較 {selectedPolicies.length} 張保單 · 滑鼠移入 ⚠️ 查看社群來源
-          </p>
-        </div>
-      </div>
-      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-[var(--shadow-soft)]">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="w-[180px] font-semibold text-foreground">比較維度</TableHead>
-                {selectedPolicies.map((p) => (
-                  <TableHead key={p.id} className="min-w-[220px] font-semibold text-foreground">
-                    <div className="flex items-center gap-1.5">
-                      {p.company}
-                      {p.flagged && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button className="cursor-pointer" aria-label="warning source">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="text-warning text-base">⚠️</span>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">點擊查看來源</TooltipContent>
-                              </Tooltip>
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-72" side="top">
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-warning font-semibold text-sm">
-                                <AlertTriangle className="h-4 w-4" /> 社群風評提示
-                              </div>
-                              <div className="text-xs text-muted-foreground">來源 Source</div>
-                              <div className="text-sm font-medium">{p.flagged.source}</div>
-                              <p className="text-xs text-muted-foreground leading-relaxed pt-1 border-t border-border">
-                                {p.flagged.note}
-                              </p>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
-                    </div>
-                    <div className="text-xs font-normal text-muted-foreground mt-0.5">
-                      {p.companyEn}
-                    </div>
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell className="font-medium align-top">
-                  理賠標準
-                  <div className="text-xs text-muted-foreground font-normal mt-0.5">Payout Standards</div>
-                </TableCell>
-                {selectedPolicies.map((p) => {
-                  const meta = PAYOUT_META[p.payoutStandard];
-                  return (
-                    <TableCell key={p.id} className="align-top">
-                      <Badge variant="outline" className={meta.className}>
-                        <meta.icon className="h-3.5 w-3.5 mr-1" />
-                        {meta.label}
-                      </Badge>
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium align-top">
-                  類別與公司
-                  <div className="text-xs text-muted-foreground font-normal mt-0.5">Category & Type</div>
-                </TableCell>
-                {selectedPolicies.map((p) => (
-                  <TableCell key={p.id} className="align-top">
-                    <div className="flex flex-col gap-1">
-                      <Badge variant="secondary" className="w-fit">{p.category}</Badge>
-                      <span className="text-sm text-muted-foreground">{p.medicalType}</span>
-                    </div>
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium align-top">
-                  理賠金額
-                  <div className="text-xs text-muted-foreground font-normal mt-0.5">Payout Amount</div>
-                </TableCell>
-                {selectedPolicies.map((p) => (
-                  <TableCell key={p.id} className="align-top">
-                    <div className="font-semibold text-foreground">{p.payoutAmount}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      賠償比例 {p.payoutRatio}
-                    </div>
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium align-top">
-                  年繳保費
-                  <div className="text-xs text-muted-foreground font-normal mt-0.5">Annual Premium</div>
-                </TableCell>
-                {selectedPolicies.map((p) => (
-                  <TableCell key={p.id} className="align-top">
-                    <div className="text-primary font-bold text-lg">
-                      NT$ {p.premium.toLocaleString()}
-                    </div>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      <AiAssistant
+        answers={answers}
+        selectedPolicies={selectedPolicies}
+        onViewDifference={viewDifference}
+      />
     </div>
   );
 }
@@ -515,8 +416,8 @@ function DualReimbursement({
                 <div className="space-y-2">
                   <div className="font-semibold text-sm">計算邏輯 Calculation</div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    契合度 = 年齡風險加權 × 30% + 疾病類別匹配 × 30% + 雙實付覆蓋率 × 25% + 社群風評 × 15%。
-                    所有分數皆基於公開理賠數據與社群討論指標。
+                    契合度 = 年齡風險加權 × 30% + 疾病類別匹配 × 30% + 雙實付覆蓋率 × 25% + 社群風評
+                    × 15%。 所有分數皆基於公開理賠數據與社群討論指標。
                   </p>
                 </div>
               </PopoverContent>
