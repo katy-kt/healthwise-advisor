@@ -5,12 +5,10 @@ import {
   Shield,
   Sparkles,
   Info,
-  AlertTriangle,
   CheckCircle2,
   TrendingUp,
   Activity,
   Users,
-  ListChecks,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,17 +20,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 
 import { Questionnaire } from "@/components/insurance/Questionnaire";
@@ -218,8 +207,12 @@ function Index() {
             </TabsList>
 
             <TabsContent value="plans" className="space-y-8">
-              <PlanResults onCompare={comparePlan} />
-              <ComparisonTable selectedPolicies={selectedPolicies} />
+              <PlanResults onCompare={comparePlan} plans={plans} budget={answers.budget} />
+              <ComparisonMatrix
+                policies={selectedPolicies}
+                onRemove={(id) => toggleSelect(id, false)}
+                highlightAnchor={highlightAnchor}
+              />
             </TabsContent>
 
             <TabsContent value="recommendations" className="space-y-6">
@@ -301,7 +294,11 @@ function Index() {
                 })}
               </Accordion>
 
-              <ComparisonTable selectedPolicies={selectedPolicies} />
+              <ComparisonMatrix
+                policies={selectedPolicies}
+                onRemove={(id) => toggleSelect(id, false)}
+                highlightAnchor={highlightAnchor}
+              />
             </TabsContent>
 
             <TabsContent value="dual">
