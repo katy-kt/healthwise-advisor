@@ -99,7 +99,15 @@ function PlanCard({ plan, onCompare }: { plan: Plan; onCompare: (p: Plan) => voi
   );
 }
 
-export function PlanResults({ onCompare }: { onCompare: (plan: Plan) => void }) {
+export function PlanResults({
+  onCompare,
+  plans = PLANS,
+  budget,
+}: {
+  onCompare: (plan: Plan) => void;
+  plans?: Plan[];
+  budget?: number;
+}) {
   const [tier, setTier] = useState<PlanTier>("standard");
 
   return (
@@ -110,18 +118,19 @@ export function PlanResults({ onCompare }: { onCompare: (plan: Plan) => void }) 
         <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
           <Wallet className="h-4 w-4" />
           三個方案代表不同保障程度，非排名高低
+          {budget ? `，且全部不超過您的月預算 NT$${budget.toLocaleString()}` : ""}
         </p>
       </div>
 
       <Tabs value={tier} onValueChange={(v) => setTier(v as PlanTier)}>
         <TabsList className="grid w-full sm:w-auto sm:inline-grid grid-cols-3 mb-5">
-          {PLANS.map((p) => (
+          {plans.map((p) => (
             <TabsTrigger key={p.tier} value={p.tier}>
               {p.name}
             </TabsTrigger>
           ))}
         </TabsList>
-        {PLANS.map((p) => (
+        {plans.map((p) => (
           <TabsContent key={p.tier} value={p.tier} className="animate-in fade-in duration-300">
             <PlanCard plan={p} onCompare={onCompare} />
           </TabsContent>

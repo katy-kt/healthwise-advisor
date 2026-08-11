@@ -37,10 +37,13 @@ import { Progress } from "@/components/ui/progress";
 
 import { Questionnaire } from "@/components/insurance/Questionnaire";
 import { PlanResults } from "@/components/insurance/PlanResults";
+import { ComparisonMatrix } from "@/components/insurance/ComparisonMatrix";
+import { AiAssistant } from "@/components/insurance/AiAssistant";
 import {
   type Answers,
   type Gender,
   type Plan,
+  buildPlans,
   DEFAULT_ANSWERS,
   DISEASES,
   MAX_COMPARE,
@@ -64,6 +67,11 @@ function Index() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [highlightAnchor, setHighlightAnchor] = useState<{
+    anchor: string;
+    nonce: number;
+  } | null>(null);
+  const [plans, setPlans] = useState<Plan[]>(() => buildPlans(DEFAULT_ANSWERS));
 
   const gender: Gender = answers.gender;
   const age = String(answers.age);
@@ -75,6 +83,7 @@ function Index() {
     setLoading(true);
     setSubmitted(false);
     setSelected([]);
+    setPlans(buildPlans(answers));
     setTimeout(() => {
       setLoading(false);
       setSubmitted(true);
@@ -117,6 +126,10 @@ function Index() {
     () => MOCK_POLICIES.filter((p) => selected.includes(p.id)),
     [selected],
   );
+
+  const viewDifference = (anchor: string) => {
+    setHighlightAnchor({ anchor, nonce: Date.now() });
+  };
 
   const matchScore = useMemo(() => {
     const a = answers.age;
