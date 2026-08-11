@@ -79,10 +79,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "InsureMatch AI — Smart Insurance Recommendations" },
+      { title: "InsuranceMatch AI — Smart Insurance Recommendations" },
       { name: "description", content: "AI-powered health insurance recommendation and comparison dashboard with dual reimbursement matching." },
-      { name: "author", content: "InsureMatch AI" },
-      { property: "og:title", content: "InsureMatch AI — Smart Insurance Recommendations" },
+      { name: "author", content: "InsuranceMatch AI" },
+      { property: "og:title", content: "InsuranceMatch AI — Smart Insurance Recommendations" },
       { property: "og:description", content: "Compare health insurance policies side-by-side with transparent AI matching." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
