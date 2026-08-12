@@ -27,7 +27,7 @@ function PlanCard({ plan, onCompare }: { plan: Plan; onCompare: (p: Plan) => voi
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Layers className="h-4 w-4 text-teal" />
-            <span className="font-semibold">{plan.items.length}</span> 個險種
+            <span className="font-semibold">{new Set(plan.items.map((item) => item.categoryLabel)).size}</span> 個險種
           </div>
           <div className="flex items-center gap-2 text-sm">
             <CheckCircle2 className="h-4 w-4 text-success" />

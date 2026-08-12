@@ -78,6 +78,21 @@ export function Questionnaire({
 }) {
   const [step, setStep] = useState(0);
   const patch = (p: Partial<Answers>) => setAnswers({ ...answers, ...p });
+  const stepComplete = [
+    answers.ageConfirmed && answers.age >= 0 && answers.age <= 100 && answers.gender !== null,
+    answers.identity !== null && answers.income !== null,
+    answers.risks.length > 0 && answers.mortgage !== null && answers.dependents !== null,
+    answers.existing.length > 0 && answers.budgetConfirmed,
+    answers.preference !== null && answers.infoStyle !== null,
+  ][step];
+
+  const next = () => {
+    if (!stepComplete) {
+      toast.warning("請完成本頁所有必填問題後再繼續");
+      return;
+    }
+    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+  };
 
   const toggleRisk = (r: string) => {
     if (answers.risks.includes(r)) {
@@ -161,18 +176,20 @@ export function Questionnaire({
                   <div className="flex items-center gap-3">
                     <Input
                       type="number"
-                      min={18}
-                      max={80}
+                      min={0}
+                      max={100}
                       value={answers.age}
-                      onChange={(e) => patch({ age: Number(e.target.value) })}
+                      onChange={(e) => patch({ age: Number(e.target.value), ageConfirmed: true })}
+                      onBlur={() => patch({ ageConfirmed: true })}
                       className="h-11 text-base font-semibold text-primary"
                       aria-label="年齡"
                     />
                     <span className="text-sm text-muted-foreground shrink-0">歲</span>
                   </div>
-                  {(answers.age < 18 || answers.age > 80 || Number.isNaN(answers.age)) && (
-                    <p className="mt-2 text-xs text-destructive">請輸入 18 – 80 之間的年齡</p>
+                  {(answers.age < 0 || answers.age > 100 || Number.isNaN(answers.age)) && (
+                    <p className="mt-2 text-xs text-destructive">請輸入 0 – 100 之間的有效年齡</p>
                   )}
+                  {!answers.ageConfirmed && <p className="mt-2 text-xs text-muted-foreground">顯示值僅供示範，請點選欄位確認</p>}
                 </div>
               </Field>
               <Field label="性別">
@@ -296,13 +313,14 @@ export function Questionnaire({
                     min={2000}
                     max={30000}
                     step={100}
-                    onValueChange={(v) => patch({ budget: v[0] })}
+                    onValueChange={(v) => patch({ budget: v[0], budgetConfirmed: true })}
                     className="mt-5"
                   />
                   <div className="flex justify-between text-xs text-muted-foreground mt-2">
                     <span>NT$2,000</span>
                     <span>NT$30,000</span>
                   </div>
+                  {!answers.budgetConfirmed && <p className="mt-2 text-xs text-muted-foreground">顯示值僅供示範，請拖曳滑桿確認預算</p>}
                 </div>
               </Field>
             </>
@@ -344,14 +362,14 @@ export function Questionnaire({
                 </div>
                 <dl className="mt-4 grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
                   {[
-                    ["年齡", `${answers.age} 歲（${answers.gender === "male" ? "男" : "女"}）`],
+                    ["年齡", answers.ageConfirmed ? `${answers.age} 歲（${answers.gender === "male" ? "男" : "女"}）` : null],
                     ["身份", answers.identity],
                     ["年收入", answers.income],
-                    ["月預算", `NT$${answers.budget.toLocaleString()}`],
-                    ["擔心風險", answers.risks.join("、") || "未選擇"],
-                    ["已有保障", answers.existing.join("、") || "未選擇"],
+                    ["月預算", answers.budgetConfirmed ? `NT$${answers.budget.toLocaleString()}` : null],
+                    ["擔心風險", answers.risks.join("、") || null],
+                    ["已有保障", answers.existing.join("、") || null],
                     ["偏好", answers.preference],
-                  ].map(([k, v]) => (
+                  ].filter(([, v]) => v).map(([k, v]) => (
                     <div key={k} className="flex gap-2">
                       <dt className="text-muted-foreground shrink-0 w-20">{k}：</dt>
                       <dd className="font-medium text-foreground">{v}</dd>
@@ -378,7 +396,7 @@ export function Questionnaire({
         </Badge>
         {step < STEPS.length - 1 ? (
           <Button
-            onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+            onClick={next}
             className="bg-[image:var(--gradient-hero)] hover:opacity-95"
           >
             下一步
@@ -386,8 +404,8 @@ export function Questionnaire({
           </Button>
         ) : (
           <Button
-            onClick={onSubmit}
-            disabled={loading}
+            onClick={() => stepComplete && onSubmit()}
+            disabled={loading || !stepComplete}
             className="h-11 px-6 text-base bg-[image:var(--gradient-hero)] hover:opacity-95 shadow-[var(--shadow-soft)]"
           >
             {loading ? (

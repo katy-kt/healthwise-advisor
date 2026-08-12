@@ -27,6 +27,7 @@ interface InsuranceState {
   setAge: (age: string) => void;
   setDisease: (disease: DiseaseKey) => void;
   togglePolicySelection: (id: string, checked: boolean) => void;
+  selectPolicies: (ids: string[]) => void;
   clearSelection: () => void;
   generateRecommendations: () => Promise<void>;
 }
@@ -63,6 +64,8 @@ export const useInsuranceStore = create<InsuranceState>((set, get) => ({
       set({ selectedPolicyIds: selectedPolicyIds.filter((x) => x !== id) });
     }
   },
+
+  selectPolicies: (ids) => set({ selectedPolicyIds: [...new Set(ids)].slice(0, 3) }),
 
   clearSelection: () => set({ selectedPolicyIds: [] }),
 
