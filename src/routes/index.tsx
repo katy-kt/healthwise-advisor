@@ -1,15 +1,12 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Shield, Sparkles, Users } from "lucide-react";
-import { Accordion } from "@/components/ui/accordion";
+import { Shield, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Questionnaire } from "@/components/insurance/Questionnaire";
 import { PlanResults } from "@/components/insurance/PlanResults";
-import { InsuranceForm } from "@/components/InsuranceForm";
-import { PolicyCard } from "@/components/PolicyCard";
-import { PolicyComparison } from "@/components/PolicyComparison";
-import { DualReimbursement } from "@/components/DualReimbursement";
+import { ComparisonMatrix } from "@/components/insurance/ComparisonMatrix";
+import { AiAssistant } from "@/components/insurance/AiAssistant";
 import { DEFAULT_ANSWERS, MOCK_POLICIES, buildPlans, type Answers, type Plan } from "@/data/insurance";
 import { useInsuranceStore } from "@/store/useInsuranceStore";
 
@@ -18,33 +15,16 @@ export const Route = createFileRoute("/")({ component: Index });
 function Index() {
   const [answers, setAnswers] = useState<Answers>({ ...DEFAULT_ANSWERS });
   const [completed, setCompleted] = useState(false);
+  const [highlightAnchor, setHighlightAnchor] = useState<{ anchor: string; nonce: number } | null>(null);
   const plans = useMemo(() => (completed ? buildPlans(answers) : []), [answers, completed]);
   const selectedPolicyIds = useInsuranceStore((state) => state.selectedPolicyIds);
   const selectPolicies = useInsuranceStore((state) => state.selectPolicies);
-  const loading = useInsuranceStore((state) => state.loading);
-  const submitted = useInsuranceStore((state) => state.submitted);
-  const aiSummary = useInsuranceStore((state) => state.aiSummary);
-  const aiReasoning = useInsuranceStore((state) => state.aiReasoning);
-  const displayPolicies = useInsuranceStore((state) => state.displayPolicies);
-  const setGender = useInsuranceStore((state) => state.setGender);
-  const setAge = useInsuranceStore((state) => state.setAge);
-  const setDisease = useInsuranceStore((state) => state.setDisease);
-  const generateRecommendations = useInsuranceStore((state) => state.generateRecommendations);
-  const activePolicies = displayPolicies.length > 0 ? displayPolicies : MOCK_POLICIES;
+  const togglePolicySelection = useInsuranceStore((state) => state.togglePolicySelection);
+  const selectedPolicies = MOCK_POLICIES.filter((policy) => selectedPolicyIds.includes(policy.id));
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!answers.gender || !answers.ageConfirmed || !answers.budgetConfirmed) return;
     setCompleted(true);
-    setGender(answers.gender);
-    setAge(String(answers.age));
-    setDisease(
-      answers.risks.includes("意外受傷")
-        ? "accident"
-        : answers.risks.includes("住院醫療花費")
-          ? "surgery"
-          : "cancer",
-    );
-    await generateRecommendations();
     setTimeout(() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
@@ -80,52 +60,62 @@ function Index() {
               </h1>
               <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">完成五個步驟，我們會依照您實際提供的資料，在預算內整理三種保障策略。</p>
             </div>
-            <Questionnaire answers={answers} setAnswers={setAnswers} onSubmit={handleSubmit} loading={loading} />
+            <Questionnaire answers={answers} setAnswers={setAnswers} onSubmit={handleSubmit} loading={false} />
           </div>
         </section>
 
-        <InsuranceForm />
-
-        {completed && answers.budget !== null && (
+        {completed && (
           <section id="plans" className="mx-auto max-w-5xl scroll-mt-24 px-4 py-12">
             <PlanResults plans={plans} budget={answers.budget} onCompare={handleCompare} />
           </section>
         )}
 
-        {(completed || submitted) && (
-          <section id="comparison" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16">
-            <Tabs defaultValue="recommendations">
-              <TabsList className="mb-6 grid w-full grid-cols-2 sm:inline-grid sm:w-auto">
-                <TabsTrigger value="recommendations"><Shield className="mr-1.5 h-4 w-4" />保單清單與比較</TabsTrigger>
-                <TabsTrigger value="dual"><Sparkles className="mr-1.5 h-4 w-4" />雙實付智慧推薦</TabsTrigger>
-              </TabsList>
-              <TabsContent value="recommendations" className="space-y-6">
-                {submitted && aiSummary && (
-                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-primary"><Sparkles className="h-4 w-4" />AI 推薦摘要</div>
-                    <p className="text-sm leading-7 text-foreground">{aiSummary}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {aiReasoning.map((reason, index) => <Badge key={`${reason}-${index}`} variant="secondary" className="bg-background">{reason}</Badge>)}
-                    </div>
-                  </div>
-                )}
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <h2 className="text-2xl font-bold tracking-tight">推薦保單清單</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">可手動勾選最多 3 張，或從上方方案一鍵帶入。</p>
-                  </div>
-                  <div className="text-sm text-muted-foreground">已選擇 <span className="font-semibold text-primary">{selectedPolicyIds.length}</span> / 3</div>
+        {completed && (
+          <section className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16">
+            <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-soft)]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="font-semibold">商品比較</h2>
+                  <p className="text-sm text-muted-foreground">已選 {selectedPolicies.length} 款商品 · 最多可比較 8 款</p>
                 </div>
-                <Accordion type="multiple" className="space-y-3">
-                  {activePolicies.map((policy, index) => <PolicyCard key={policy.id} policy={policy} index={index} />)}
-                </Accordion>
-                <PolicyComparison />
-              </TabsContent>
-              <TabsContent value="dual"><DualReimbursement /></TabsContent>
-            </Tabs>
+                <Button variant="outline" size="sm" onClick={() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" })}>
+                  返回推薦結果
+                </Button>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {MOCK_POLICIES.map((policy) => {
+                  const selected = selectedPolicyIds.includes(policy.id);
+                  return (
+                    <Button
+                      key={policy.id}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      onClick={() => togglePolicySelection(policy.id, !selected)}
+                      disabled={!selected && selectedPolicyIds.length >= 8}
+                    >
+                      {selected ? "移除" : "加入"} {policy.company} · {policy.code}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <ComparisonMatrix
+              policies={selectedPolicies}
+              onRemove={(id) => togglePolicySelection(id, false)}
+              highlightAnchor={highlightAnchor}
+            />
           </section>
         )}
       </main>
+
+      {completed && (
+        <AiAssistant
+          answers={answers}
+          selectedPolicies={selectedPolicies}
+          onViewDifference={(anchor) => setHighlightAnchor({ anchor, nonce: Date.now() })}
+        />
+      )}
 
       <footer className="border-t border-border/60 bg-card/50">
         <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">

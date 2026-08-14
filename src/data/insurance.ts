@@ -548,7 +548,7 @@ const CANDIDATES: Candidate[] = [
     priority: 3,
     risks: ["意外受傷", "身故後家人生活"],
     reason: (a) =>
-      `您把「意外受傷」列為主要擔心風險${a.dependents === "沒有" ? "" : "，且家中有需要扶養的人"}，本張含意外身故與失能一次金並提供交通事故加倍給付。`,
+      `${a.risks.includes("意外受傷") ? "您把意外受傷列為主要擔心風險" : "此方案以意外保障補足日常突發風險"}${a.dependents === "有需要撫養的人" ? "，且家中有需要扶養的人" : ""}，本張含意外身故與失能一次金並提供交通事故加倍給付。`,
   },
   {
     policyId: "p8",
@@ -557,7 +557,7 @@ const CANDIDATES: Candidate[] = [
     priority: 3,
     risks: ["重大疾病"],
     reason: (a) =>
-      `您最擔心重大疾病，而 ${a.age} 歲的一年期癌症險費率仍低，可用有限預算先取得癌症住院與手術保障，未來預算提高再轉換終身型。`,
+      `${a.risks.includes("重大疾病") ? "您已將重大疾病列為主要擔心風險" : "此方案加入重大疾病的基礎防護"}，而 ${a.age} 歲的一年期癌症險費率仍低，可用有限預算先取得癌症住院與手術保障。`,
   },
   {
     policyId: "p1",
@@ -664,7 +664,7 @@ function buildPlan(tier: PlanTier, a: Answers): Plan {
   const picked: Candidate[] = [];
   let total = 0;
   for (const c of ranked) {
-    if (picked.length >= 3) break;
+    if (picked.length >= 5) break;
     if (total + c.monthly > cap) continue;
     picked.push(c);
     total += c.monthly;

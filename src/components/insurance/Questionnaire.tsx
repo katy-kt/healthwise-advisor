@@ -79,7 +79,7 @@ export function Questionnaire({
   const [step, setStep] = useState(0);
   const patch = (p: Partial<Answers>) => setAnswers({ ...answers, ...p });
   const stepComplete = [
-    answers.ageConfirmed && answers.age >= 0 && answers.age <= 100 && answers.gender !== null,
+    answers.ageConfirmed && answers.age >= 18 && answers.age <= 80 && answers.gender !== null,
     answers.identity !== null && answers.income !== null,
     answers.risks.length > 0 && answers.mortgage !== null && answers.dependents !== null,
     answers.existing.length > 0 && answers.budgetConfirmed,
@@ -176,8 +176,8 @@ export function Questionnaire({
                   <div className="flex items-center gap-3">
                     <Input
                       type="number"
-                      min={0}
-                      max={100}
+                      min={18}
+                      max={80}
                       value={answers.age}
                       onChange={(e) => patch({ age: Number(e.target.value), ageConfirmed: true })}
                       onBlur={() => patch({ ageConfirmed: true })}
@@ -186,8 +186,8 @@ export function Questionnaire({
                     />
                     <span className="text-sm text-muted-foreground shrink-0">歲</span>
                   </div>
-                  {(answers.age < 0 || answers.age > 100 || Number.isNaN(answers.age)) && (
-                    <p className="mt-2 text-xs text-destructive">請輸入 0 – 100 之間的有效年齡</p>
+                  {(answers.age < 18 || answers.age > 80 || Number.isNaN(answers.age)) && (
+                    <p className="mt-2 text-xs text-destructive">請輸入 18 – 80 之間的有效年齡</p>
                   )}
                   {!answers.ageConfirmed && <p className="mt-2 text-xs text-muted-foreground">顯示值僅供示範，請點選欄位確認</p>}
                 </div>

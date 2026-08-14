@@ -54,6 +54,7 @@ export function AiAssistant({
   const [thinking, setThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousPolicyIds = useRef<string | null>(null);
 
   const differences = useMemo(() => computeDifferences(selectedPolicies), [selectedPolicies]);
 
@@ -71,9 +72,21 @@ export function AiAssistant({
   useEffect(() => {
     if (selectedPolicies.length === 0) {
       setQuestions([]);
-      return;
+    } else {
+      setQuestions(generateSuggestedQuestions(ctx));
     }
-    setQuestions(generateSuggestedQuestions(ctx));
+    const ids = selectedPolicies.map((policy) => policy.id).sort().join(",");
+    if (previousPolicyIds.current !== null && previousPolicyIds.current !== ids) {
+      setMessages((messages) => [
+        ...messages,
+        {
+          id: Math.random().toString(36).slice(2),
+          role: "system",
+          content: "比較商品已更新，已重新分析目前差異。",
+        },
+      ]);
+    }
+    previousPolicyIds.current = ids;
   }, [ctx, selectedPolicies.length]);
 
   useEffect(() => {
