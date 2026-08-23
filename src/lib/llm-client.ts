@@ -4,14 +4,10 @@ export interface ChatMessage {
 }
 
 export async function askInsuranceLLM(question: string, history: ChatMessage[] = []) {
-  const baseUrl = import.meta.env.VITE_LLM_API_BASE_URL || "/api";
-  const apiKey = import.meta.env.VITE_LLM_API_KEY || import.meta.env.FAST_API_KEY || "";
-
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/chat/completions`, {
+  const response = await fetch("/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
     },
     body: JSON.stringify({
       model: "insurance-qa-v1",

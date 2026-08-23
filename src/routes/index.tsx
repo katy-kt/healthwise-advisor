@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Shield, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Questionnaire } from "@/components/insurance/Questionnaire";
 import { PlanResults } from "@/components/insurance/PlanResults";
 import { ComparisonMatrix } from "@/components/insurance/ComparisonMatrix";
 import { AiAssistant } from "@/components/insurance/AiAssistant";
-import { DEFAULT_ANSWERS, MOCK_POLICIES, buildPlans, type Answers, type Plan } from "@/data/insurance";
+import { DEFAULT_ANSWERS, MOCK_POLICIES, buildPlans, type Answers, type Plan, type Policy } from "@/data/insurance";
+import { generateRecommendations } from "@/lib/recommendation-llm";
 import { useInsuranceStore } from "@/store/useInsuranceStore";
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -15,17 +17,41 @@ export const Route = createFileRoute("/")({ component: Index });
 function Index() {
   const [answers, setAnswers] = useState<Answers>({ ...DEFAULT_ANSWERS });
   const [completed, setCompleted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [generatedPolicies, setGeneratedPolicies] = useState<Policy[]>([]);
+  const [generatedPlans, setGeneratedPlans] = useState<Plan[]>([]);
   const [highlightAnchor, setHighlightAnchor] = useState<{ anchor: string; nonce: number } | null>(null);
-  const plans = useMemo(() => (completed ? buildPlans(answers) : []), [answers, completed]);
+  const plans = useMemo(
+    () => (completed ? (generatedPolicies.length ? generatedPlans : buildPlans(answers)) : []),
+    [answers, completed, generatedPolicies, generatedPlans],
+  );
   const selectedPolicyIds = useInsuranceStore((state) => state.selectedPolicyIds);
   const selectPolicies = useInsuranceStore((state) => state.selectPolicies);
   const togglePolicySelection = useInsuranceStore((state) => state.togglePolicySelection);
-  const selectedPolicies = MOCK_POLICIES.filter((policy) => selectedPolicyIds.includes(policy.id));
+  const availablePolicies = generatedPolicies.length ? generatedPolicies : MOCK_POLICIES;
+  const selectedPolicies = availablePolicies.filter((policy) => selectedPolicyIds.includes(policy.id));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!answers.gender || !answers.ageConfirmed || !answers.budgetConfirmed) return;
-    setCompleted(true);
-    setTimeout(() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" }), 100);
+    setLoading(true);
+    setCompleted(false);
+    setGeneratedPolicies([]);
+    setGeneratedPlans([]);
+    selectPolicies([]);
+    try {
+      const result = await generateRecommendations(answers);
+      setGeneratedPolicies(result.policies);
+      setGeneratedPlans(result.plans);
+      setCompleted(true);
+      toast.success(`已產出 ${result.policies.length} 筆推薦保單`);
+      setTimeout(() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" }), 100);
+    } catch (error) {
+      toast.error("推薦方案產出失敗", {
+        description: error instanceof Error ? error.message : "請確認後端 LLM 服務是否正在執行",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCompare = (plan: Plan) => {
@@ -60,13 +86,13 @@ function Index() {
               </h1>
               <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">完成五個步驟，我們會依照您實際提供的資料，在預算內整理三種保障策略。</p>
             </div>
-            <Questionnaire answers={answers} setAnswers={setAnswers} onSubmit={handleSubmit} loading={false} />
+            <Questionnaire answers={answers} setAnswers={setAnswers} onSubmit={handleSubmit} loading={loading} />
           </div>
         </section>
 
         {completed && (
           <section id="plans" className="mx-auto max-w-5xl scroll-mt-24 px-4 py-12">
-            <PlanResults plans={plans} budget={answers.budget} onCompare={handleCompare} />
+            <PlanResults plans={plans} policies={availablePolicies} budget={answers.budget} onCompare={handleCompare} />
           </section>
         )}
 
@@ -83,7 +109,7 @@ function Index() {
                 </Button>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {MOCK_POLICIES.map((policy) => {
+                {availablePolicies.map((policy) => {
                   const selected = selectedPolicyIds.includes(policy.id);
                   return (
                     <Button
