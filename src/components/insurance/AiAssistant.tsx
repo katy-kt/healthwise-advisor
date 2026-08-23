@@ -15,13 +15,14 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Answers, Policy } from "@/data/insurance";
+import { askInsuranceLLM, type ChatMessage } from "@/lib/llm-client";
 import {
   type AssistantContext,
   type AssistantMessage,
   type SuggestedQuestion,
   computeDifferences,
-  generateMockAIResponse,
   generateSuggestedQuestions,
+  makeSystemMessage,
   makeUserMessage,
   regenerateQuestions,
 } from "@/lib/mock-ai";
@@ -97,17 +98,35 @@ export function AiAssistant({
     if (open) inputRef.current?.focus();
   }, [open, thinking]);
 
-  const ask = (text: string) => {
+  const ask = async (text: string) => {
     if (!text.trim() || thinking) return;
-    setMessages((m) => [...m, makeUserMessage(text.trim())]);
+    const question = text.trim();
+    const previousMessages: ChatMessage[] = messages
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .map((message) => ({ role: message.role, content: message.content }));
+    setMessages((m) => [...m, makeUserMessage(question)]);
     setThinking(true);
-    window.setTimeout(() => {
-      const reply = generateMockAIResponse(text.trim(), ctx);
-      setMessages((m) => [...m, reply]);
-      setThinking(false);
-      // Follow-up proactive questions after every answer.
+    try {
+      const context = [
+        "你是 HealthWise 的保險比較助手。請只根據提供的問卷、保單與比較差異回答，不要捏造保險條款；若資料不足，請明確說明需要確認正式條款。回答使用繁體中文，清楚、具體、避免保證式的投保建議。",
+        `問卷資料：${JSON.stringify(answers)}`,
+        `目前比較保單：${JSON.stringify(selectedPolicies)}`,
+        `比較差異：${JSON.stringify(differences)}`,
+        `回答偏好：${JSON.stringify(preference)}`,
+      ].join("\n");
+      const content = await askInsuranceLLM(`${context}\n\n使用者問題：${question}`, previousMessages);
+      if (!content.trim()) throw new Error("LLM 回傳空白內容");
+      setMessages((m) => [
+        ...m,
+        { id: Math.random().toString(36).slice(2), role: "assistant", content },
+      ]);
       setQuestions(generateSuggestedQuestions(ctx));
-    }, 700);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "無法取得 AI 回覆";
+      setMessages((m) => [...m, makeSystemMessage(`AI 暫時無法回覆：${message}`)]);
+    } finally {
+      setThinking(false);
+    }
   };
 
   const applyStyle = () => {
