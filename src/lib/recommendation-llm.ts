@@ -1,28 +1,12 @@
 import { askInsuranceLLM } from "@/lib/llm-client";
-import type { Answers, Plan, PlanItem, Policy } from "@/data/insurance";
-import { DISEASES, MOCK_POLICIES, planMonthly } from "@/data/insurance";
-
-interface LlmPolicy {
-  id?: unknown;
-  company?: unknown;
-  companyEn?: unknown;
-  category?: unknown;
-  medicalType?: unknown;
-  premium?: unknown;
-  code?: unknown;
-  tags?: unknown;
-  policyName?: unknown;
-  description?: unknown;
-  payoutAmount?: unknown;
-  payoutRatio?: unknown;
-  payoutStandard?: unknown;
-  [key: string]: unknown;
-}
+import type { Answers, Plan, Policy } from "@/data/insurance";
+import { DISEASES, planMonthly } from "@/data/insurance";
 
 interface LlmRecommendation {
   summary?: unknown;
   reasoning?: unknown;
   policies?: unknown;
+  plans?: unknown;
 }
 
 const PAYOUT_STANDARDS = new Set<Policy["payoutStandard"]>([
@@ -31,145 +15,287 @@ const PAYOUT_STANDARDS = new Set<Policy["payoutStandard"]>([
   "consult",
 ]);
 
-function asText(value: unknown, fallback = "資料待確認") {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
-
-function asTextList(value: unknown, fallback: string[] = []) {
-  if (!Array.isArray(value)) return fallback;
-  return value.filter((item): item is string => typeof item === "string" && item.trim()).map((item) => item.trim());
-}
-
-function asPositiveNumber(value: unknown, fallback: number) {
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) && number > 0 ? Math.round(number) : fallback;
-}
-
 function extractJson(text: string): LlmRecommendation {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+
   try {
     return JSON.parse(cleaned) as LlmRecommendation;
   } catch {
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
-    if (start < 0 || end <= start) throw new Error("LLM 回應不是有效的 JSON");
+
+    if (start < 0 || end <= start) {
+      throw new Error("LLM 回應不是有效的 JSON");
+    }
+
     return JSON.parse(cleaned.slice(start, end + 1)) as LlmRecommendation;
   }
 }
 
-function normalizePolicy(raw: LlmPolicy, index: number): Policy | null {
-  const fallback = MOCK_POLICIES[index];
-  if (!raw || typeof raw !== "object") return null;
+function validatePolicy(raw: unknown, index: number): Policy {
+  if (!raw || typeof raw !== "object") {
+    throw new Error(`第 ${index + 1} 筆保單格式錯誤`);
+  }
 
-  const id = `p${index + 1}`;
-  const premium = asPositiveNumber(raw.premium, fallback?.premium ?? 0);
-  const payoutStandard = PAYOUT_STANDARDS.has(raw.payoutStandard as Policy["payoutStandard"])
-    ? (raw.payoutStandard as Policy["payoutStandard"])
-    : "consult";
+  const policy = raw as Policy;
+  const expectedId = `p${index + 1}`;
 
-  if (!premium || !asText(raw.company, fallback?.company)) return null;
+  if (policy.id !== expectedId) {
+    throw new Error(
+      `第 ${index + 1} 筆保單 id 必須是 ${expectedId}`,
+    );
+  }
 
-  return {
-    ...fallback,
-    ...raw,
-    id,
-    company: asText(raw.company, fallback?.company ?? "保險公司待確認"),
-    companyEn: asText(raw.companyEn, fallback?.companyEn ?? "Insurance Provider"),
-    category: asText(raw.category, fallback?.category ?? "醫療險"),
-    medicalType: asText(raw.medicalType, fallback?.medicalType ?? "醫療保障"),
-    premium,
-    code: asText(raw.code, fallback?.code ?? `LLM-${id.toUpperCase()}`),
-    tags: asTextList(raw.tags, fallback?.tags ?? []),
-    policyName: asText(raw.policyName, fallback?.policyName ?? `個人化推薦方案 ${index + 1}`),
-    description: asText(raw.description, fallback?.description ?? "保障內容請以正式保單條款為準。"),
-    payoutAmount: asText(raw.payoutAmount, fallback?.payoutAmount ?? "依條款約定"),
-    payoutRatio: asText(raw.payoutRatio, fallback?.payoutRatio ?? "依條款約定"),
-    payoutStandard,
-  };
+  if (
+    typeof policy.company !== "string" ||
+    typeof policy.companyEn !== "string" ||
+    typeof policy.category !== "string" ||
+    typeof policy.medicalType !== "string" ||
+    typeof policy.premium !== "number" ||
+    !Number.isFinite(policy.premium) ||
+    policy.premium <= 0 ||
+    typeof policy.code !== "string" ||
+    !Array.isArray(policy.tags) ||
+    !policy.tags.every((tag) => typeof tag === "string") ||
+    typeof policy.policyName !== "string" ||
+    typeof policy.description !== "string" ||
+    typeof policy.payoutAmount !== "string" ||
+    typeof policy.payoutRatio !== "string" ||
+    !PAYOUT_STANDARDS.has(policy.payoutStandard)
+  ) {
+    throw new Error(`第 ${index + 1} 筆保單資料不完整`);
+  }
+
+  return policy;
 }
 
-function makePlans(policies: Policy[], answers: Answers): Plan[] {
-  const sorted = [...policies].sort((a, b) => a.premium - b.premium);
-  const riskMatches = (policy: Policy) => {
-    const text = `${policy.category} ${policy.medicalType} ${policy.tags.join(" ")}`;
-    return answers.risks.some((risk) => text.includes(risk.replace("花費", "")));
-  };
+function validatePlans(raw: unknown, policyIds: Set<string>): Plan[] {
+  if (!Array.isArray(raw) || raw.length !== 3) {
+    throw new Error("LLM 必須回傳剛好 3 個 plans");
+  }
 
-  return [
-    { tier: "lite", name: "精簡版", subtitle: "優先補足主要風險，以較低保費建立基本保障。", ratio: 0.55 },
-    { tier: "standard", name: "標準版", subtitle: "在預算內平衡保障範圍與保費。", ratio: 0.8 },
-    { tier: "full", name: "完整版", subtitle: "盡可能完整覆蓋問卷中最重要的風險。", ratio: 0.98 },
-  ].map((tier) => {
-    const cap = Math.max(sorted[0]?.premium ?? 0, Math.floor(answers.budget * tier.ratio * 12));
-    const candidates = [...sorted].sort((a, b) => Number(riskMatches(b)) - Number(riskMatches(a)) || a.premium - b.premium);
-    const selected: Policy[] = [];
-    let annualTotal = 0;
-    for (const policy of candidates) {
-      if (selected.length >= 5 || annualTotal + policy.premium > cap) continue;
-      selected.push(policy);
-      annualTotal += policy.premium;
+  const expectedTiers: Plan["tier"][] = [
+    "lite",
+    "standard",
+    "full",
+  ];
+
+  return raw.map((rawPlan, index) => {
+    if (!rawPlan || typeof rawPlan !== "object") {
+      throw new Error(`第 ${index + 1} 個 plan 格式錯誤`);
     }
-    if (selected.length === 0 && candidates[0]) selected.push(candidates[0]);
 
-    const items: PlanItem[] = selected.map((policy, index) => ({
-      policyId: policy.id,
-      level: index < Math.max(1, Math.ceil(selected.length * 0.7)) ? "必備" : "建議",
-      categoryLabel: policy.category,
-      reason: `${riskMatches(policy) ? "符合您勾選的主要風險" : "補足整體保障缺口"}；實際給付與除外責任請以正式條款為準。`,
-      monthly: Math.round(policy.premium / 12),
-    }));
+    const plan = rawPlan as Plan;
 
-    return { tier: tier.tier as Plan["tier"], name: tier.name, subtitle: tier.subtitle, items };
+    if (plan.tier !== expectedTiers[index]) {
+      throw new Error(
+        `第 ${index + 1} 個 plan 的 tier 必須是 ${expectedTiers[index]}`,
+      );
+    }
+
+    if (
+      typeof plan.name !== "string" ||
+      typeof plan.subtitle !== "string" ||
+      !Array.isArray(plan.items)
+    ) {
+      throw new Error(`第 ${index + 1} 個 plan 資料不完整`);
+    }
+
+    if (plan.items.length === 0) {
+      throw new Error(`第 ${index + 1} 個 plan 至少要有 1 個 item`);
+    }
+
+    for (const item of plan.items) {
+      if (
+        !item ||
+        typeof item !== "object" ||
+        typeof item.policyId !== "string" ||
+        !policyIds.has(item.policyId) ||
+        (item.level !== "必備" && item.level !== "建議") ||
+        typeof item.categoryLabel !== "string" ||
+        typeof item.reason !== "string" ||
+        typeof item.monthly !== "number" ||
+        !Number.isFinite(item.monthly) ||
+        item.monthly < 0
+      ) {
+        throw new Error(
+          `第 ${index + 1} 個 plan 的 items 格式錯誤`,
+        );
+      }
+    }
+
+    return plan;
   });
 }
 
 export async function generateRecommendations(answers: Answers) {
-  const diseaseContext = DISEASES.map((disease) => disease.label).join("、");
-  const prompt = `你是台灣保險推薦資料整理助手。請根據問卷產生 10 筆可供前端比較表使用的保單候選資料。
+  const diseaseContext = DISEASES
+    .map((disease) => disease.label)
+    .join("、");
 
-問卷：${JSON.stringify(answers)}
-可參考的風險類別：${diseaseContext}
+  const prompt = `你是台灣保險推薦資料整理助手。
 
-只輸出有效 JSON，不要 Markdown、不要前後說明，格式必須完全符合：
+請根據使用者問卷，直接產生：
+1. 推薦摘要 summary
+2. 推薦理由 reasoning
+3. 10 筆保單候選 policies
+4. 精簡版、標準版、完整版三個推薦方案 plans
+
+問卷：
+${JSON.stringify(answers)}
+
+可參考的風險類別：
+${diseaseContext}
+
+只輸出有效 JSON。
+不要 Markdown。
+不要加任何 JSON 前後說明。
+不要使用程式碼區塊。
+
+JSON 格式必須符合：
+
 {
   "summary": "繁體中文推薦摘要",
-  "reasoning": ["繁體中文理由1", "理由2", "理由3"],
+  "reasoning": [
+    "繁體中文推薦理由1",
+    "繁體中文推薦理由2",
+    "繁體中文推薦理由3"
+  ],
   "policies": [
     {
+      "id": "p1",
       "company": "保險公司",
       "companyEn": "英文公司名",
       "category": "醫療險或重大疾病或意外險",
       "medicalType": "保障類型",
       "premium": 12000,
       "code": "產品代碼",
-      "tags": ["標籤1", "標籤2"],
+      "tags": [
+        "標籤1",
+        "標籤2"
+      ],
       "policyName": "保單名稱",
       "description": "簡短保障描述",
       "payoutAmount": "給付額度",
       "payoutRatio": "給付比例",
-      "payoutStandard": "guaranteed"
+      "payoutStandard": "consult"
+    }
+  ],
+  "plans": [
+    {
+      "tier": "lite",
+      "name": "精簡版",
+      "subtitle": "精簡版方案說明",
+      "items": [
+        {
+          "policyId": "p1",
+          "level": "必備",
+          "categoryLabel": "保障類型",
+          "reason": "為什麼推薦這張保單",
+          "monthly": 1000
+        }
+      ]
+    },
+    {
+      "tier": "standard",
+      "name": "標準版",
+      "subtitle": "標準版方案說明",
+      "items": [
+        {
+          "policyId": "p2",
+          "level": "必備",
+          "categoryLabel": "保障類型",
+          "reason": "為什麼推薦這張保單",
+          "monthly": 1500
+        }
+      ]
+    },
+    {
+      "tier": "full",
+      "name": "完整版",
+      "subtitle": "完整版方案說明",
+      "items": [
+        {
+          "policyId": "p3",
+          "level": "建議",
+          "categoryLabel": "保障類型",
+          "reason": "為什麼推薦這張保單",
+          "monthly": 2000
+        }
+      ]
     }
   ]
 }
 
-規則：policies 必須剛好 10 筆；premium 是正數且代表年繳保費；payoutStandard 只能是 guaranteed、conditional、consult；不要捏造保證理賠，資料不確定時使用 consult。`;
+嚴格遵守以下規則：
 
-  const response = extractJson(await askInsuranceLLM(prompt));
-  if (!Array.isArray(response.policies)) throw new Error("LLM 回應缺少 policies 陣列");
+1. policies 必須剛好 10 筆。
+2. policies 的 id 必須依序為 p1、p2、p3、p4、p5、p6、p7、p8、p9、p10。
+3. 不可以重複 id。
+4. premium 必須是正數，代表年繳保費。
+5. tags 必須是字串陣列。
+6. payoutStandard 只能是 guaranteed、conditional、consult。
+7. 資料不確定時，payoutStandard 使用 consult。
+8. 不要捏造保證理賠。
+9. plans 必須剛好 3 個。
+10. plans 的 tier 必須依序為 lite、standard、full。
+11. 每一個 plan 至少要有 1 個 item。
+12. plans.items.policyId 只能使用 p1 到 p10。
+13. plans.items.level 只能是「必備」或「建議」。
+14. plans.items.monthly 必須是數字。
+15. plans 的推薦內容必須根據問卷和你產生的 policies 決定。
+16. 前端會直接使用你的 JSON，不會重新排序或修改資料，所以請確保資料本身完整且一致。`;
 
-  const policies = response.policies
-    .slice(0, 10)
-    .map((policy, index) => normalizePolicy(policy as LlmPolicy, index))
-    .filter((policy): policy is Policy => policy !== null);
+  const rawResponse = await askInsuranceLLM(prompt);
+  const response = extractJson(rawResponse);
 
-  if (policies.length < 3) throw new Error("LLM 產生的保單資料不足，無法建立比較表");
+  if (typeof response.summary !== "string") {
+    throw new Error("LLM 回應缺少 summary");
+  }
+
+  if (
+    !Array.isArray(response.reasoning) ||
+    !response.reasoning.every(
+      (item) => typeof item === "string",
+    )
+  ) {
+    throw new Error("LLM 回應的 reasoning 格式錯誤");
+  }
+
+  if (
+    !Array.isArray(response.policies) ||
+    response.policies.length !== 10
+  ) {
+    throw new Error("LLM 必須回傳剛好 10 筆 policies");
+  }
+
+  const policies = response.policies.map((policy, index) =>
+    validatePolicy(policy, index),
+  );
+
+  const policyIds = new Set(
+    policies.map((policy) => policy.id),
+  );
+
+  if (policyIds.size !== 10) {
+    throw new Error("LLM 回傳的 policy id 有重複");
+  }
+
+  const plans = validatePlans(
+    response.plans,
+    policyIds,
+  );
 
   return {
-    summary: asText(response.summary, "已根據您的問卷整理個人化保險候選方案。"),
-    reasoning: asTextList(response.reasoning).slice(0, 3),
+    summary: response.summary,
+    reasoning: response.reasoning as string[],
     policies,
-    plans: makePlans(policies, answers),
+    plans,
   };
 }
 
-export const recommendationsMonthly = (plans: Plan[]) => plans.map(planMonthly);
+export const recommendationsMonthly = (plans: Plan[]) =>
+  plans.map(planMonthly);
