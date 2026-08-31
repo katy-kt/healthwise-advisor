@@ -27,6 +27,8 @@ import {
   regenerateQuestions,
 } from "@/lib/mock-ai";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const DEPTH_LABEL: Record<AssistantContext["conversationPreference"]["depth"], string> = {
   simple: "白話版",
@@ -208,9 +210,52 @@ export function AiAssistant({
             </div>
           ) : (
             <div key={m.id} className="space-y-2">
-              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                {m.content}
-              </div>
+              <div className="text-sm leading-relaxed text-foreground">
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
+    components={{
+      table: ({ children }) => (
+        <div className="my-3 overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            {children}
+          </table>
+        </div>
+      ),
+      th: ({ children }) => (
+        <th className="border border-border bg-muted px-3 py-2 text-left font-semibold">
+          {children}
+        </th>
+      ),
+      td: ({ children }) => (
+        <td className="border border-border px-3 py-2 align-top">
+          {children}
+        </td>
+      ),
+      ul: ({ children }) => (
+        <ul className="my-2 list-disc pl-5">
+          {children}
+        </ul>
+      ),
+      ol: ({ children }) => (
+        <ol className="my-2 list-decimal pl-5">
+          {children}
+        </ol>
+      ),
+      p: ({ children }) => (
+        <p className="my-2">
+          {children}
+        </p>
+      ),
+      strong: ({ children }) => (
+        <strong className="font-semibold">
+          {children}
+        </strong>
+      ),
+    }}
+  >
+    {m.content}
+  </ReactMarkdown>
+</div>
               {m.anchor && (
                 <Button
                   variant="outline"
