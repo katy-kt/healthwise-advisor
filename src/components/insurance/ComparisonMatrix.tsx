@@ -82,19 +82,29 @@ function Cell({ row, policy }: { row: CompareRow; policy: Policy }) {
     );
   }
 
-  if (row.kind === "links") {
-    const url = String(v);
+if (row.kind === "links") {
+  const url = String(v);
+
+  if (url === "X") {
     return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-      >
-        查看文件 <ExternalLink className="h-3.5 w-3.5" />
-      </a>
+      <span className="text-muted-foreground">
+        X
+      </span>
     );
   }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+    >
+      查看文件{" "}
+      <ExternalLink className="h-3.5 w-3.5" />
+    </a>
+  );
+}
 
   return <span className="text-sm leading-relaxed">{String(v)}</span>;
 }
