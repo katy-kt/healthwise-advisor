@@ -620,18 +620,27 @@ payoutStandard 不可以填 X。
 【premium 與 monthly 特殊規則】
 ────────────────
 
-premium 必須是 number，
-而且必須大於 0。
+premium 必須是 number，而且必須大於 0。
 
-premium 不可以填 X。
+premium 屬於必要資料。
 
-如果無法合理確認 premium，
-不要為了湊滿資料而任意猜價格。
+只有在你有足夠資訊可以合理確認保費時，
+該商品才可以列入 policies。
+
+如果某張商品的 premium 無法合理確認，
+不要猜測價格，
+也不要把該商品放進 policies。
+
+請改選其他有足夠資訊可以確認 premium 的候選商品。
+
+禁止為了湊滿 10 筆 policies 而自行創造保費。
 
 monthly 必須是 number。
 
 plans.items.monthly 必須與該商品 premium
 以及方案內容保持合理一致。
+
+monthly 不可以任意猜測。
 
 ────────────────
 【推薦邏輯】
