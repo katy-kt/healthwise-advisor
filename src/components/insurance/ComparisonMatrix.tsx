@@ -29,9 +29,18 @@ export const rowDomId = (groupId: string, rowId: string) => `cmp-${groupId}-${ro
 
 function Cell({ row, policy }: { row: CompareRow; policy: Policy }) {
   const v = row.get(policy);
-  if (v === undefined || (Array.isArray(v) && v.length === 0)) {
-    return <span className="text-muted-foreground">—</span>;
-  }
+  if (
+  v === undefined ||
+  v === null ||
+  v === "" ||
+  (Array.isArray(v) && v.length === 0)
+) {
+  return (
+    <span className="text-muted-foreground">
+      X
+    </span>
+  );
+}
 
   if (row.kind === "payoutBadge") {
     const meta = PAYOUT_META[policy.payoutStandard];
