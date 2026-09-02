@@ -40,19 +40,6 @@ function extractJson(text: string): LlmRecommendation {
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
-
-function isTextList(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) &&
-    value.length > 0 &&
-    value.every(
-      (item) =>
-        typeof item === "string" &&
-        item.trim().length > 0,
-    )
-  );
-}
-
 function validatePolicy(raw: unknown, index: number): Policy {
   if (!raw || typeof raw !== "object") {
     throw new Error(`第 ${index + 1} 筆保單格式錯誤`);
@@ -92,57 +79,25 @@ function validatePolicy(raw: unknown, index: number): Policy {
   }
 
   if (
-    !isTextList(policy.tags) ||
-    !isTextList(policy.covers) ||
-    !isTextList(policy.payoutItems) ||
-    !isTextList(policy.exclusions) ||
-    !isTextList(policy.attentionPoints) ||
-    !isTextList(policy.pros) ||
-    !isTextList(policy.cons)
+    !Array.isArray(policy.tags) ||
+    !policy.tags.every(
+      (tag) => typeof tag === "string",
+    )
   ) {
     throw new Error(
-      `第 ${index + 1} 筆保單的比較表陣列欄位不完整`,
+      `第 ${index + 1} 筆保單 tags 格式錯誤`,
     );
   }
 
-  if (
-    !isText(policy.status) ||
-    !isText(policy.approvalNumber) ||
-    !isText(policy.premiumRange) ||
-    !isText(policy.paymentPeriod) ||
-    !isText(policy.coveragePeriod) ||
-    !isText(policy.mainOrRider) ||
-    !isText(policy.requiresMainPolicy) ||
-    !isText(policy.policyType) ||
-    !isText(policy.plainSummary) ||
-    !isText(policy.claimRequirements) ||
-    !isText(policy.entryAge) ||
-    !isText(policy.waitingPeriod) ||
-    !isText(policy.coolingOffPeriod) ||
-    !isText(policy.renewalRule) ||
-    !isText(policy.maxRenewalAge) ||
-    !isText(policy.occupationRestrictions) ||
-    !isText(policy.healthRestrictions) ||
-    !isText(policy.payoutAmount) ||
-    !isText(policy.payoutLimit) ||
-    !isText(policy.payoutRatio) ||
-    !isText(policy.payoutMethod) ||
-    !isText(policy.isReimbursement) ||
-    !isText(policy.receiptType) ||
-    !isText(policy.surgeryBenefit) ||
-    !isText(policy.hospitalBenefit) ||
-    !isText(policy.outpatientBenefit) ||
-    !isText(policy.otherPayoutConditions) ||
-    !isText(policy.suitableFor) ||
-    !isText(policy.notSuitableFor) ||
-    !isText(policy.policyDocumentUrl) ||
-    !isText(policy.productDocumentUrl) ||
-    !isText(policy.officialProductUrl) ||
-    !isText(policy.dataSource) ||
-    !isText(policy.lastUpdated)
-  ) {
+  if (!isText(policy.payoutAmount)) {
     throw new Error(
-      `第 ${index + 1} 筆保單的詳細比較資料不完整`,
+      `第 ${index + 1} 筆保單缺少 payoutAmount`,
+    );
+  }
+
+  if (!isText(policy.payoutRatio)) {
+    throw new Error(
+      `第 ${index + 1} 筆保單缺少 payoutRatio`,
     );
   }
 
