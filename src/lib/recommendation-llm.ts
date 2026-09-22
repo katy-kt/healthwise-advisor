@@ -1,6 +1,7 @@
 import { askInsuranceLLM } from "@/lib/llm-client";
 import type { Answers, Plan, Policy } from "@/data/insurance";
 import { DISEASES, planMonthly } from "@/data/insurance";
+import { jsonrepair } from "jsonrepair";
 
 interface LlmRecommendation {
   summary?: unknown;
@@ -21,25 +22,60 @@ function extractJson(text: string): LlmRecommendation {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "");
 
-  try {
-    return JSON.parse(cleaned) as LlmRecommendation;
-  } catch {
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
+  const candidates = [cleaned];
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
 
-    if (start < 0 || end <= start) {
-      throw new Error("LLM 回應不是有效的 JSON");
-    }
-
-    return JSON.parse(
-      cleaned.slice(start, end + 1),
-    ) as LlmRecommendation;
+  if (start >= 0 && end > start && (start > 0 || end < cleaned.length - 1)) {
+    candidates.push(cleaned.slice(start, end + 1));
   }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as LlmRecommendation;
+    } catch {
+      try {
+        return JSON.parse(jsonrepair(candidate)) as LlmRecommendation;
+      } catch {
+      }
+    }
+  }
+
+  throw new Error("LLM 回應格式錯誤，請再試一次");
 }
 
 function isText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
+
+function normalizeReasoning(
+  raw: unknown,
+): string[] | null {
+  const reasoning = Array.isArray(raw)
+    ? raw.filter(isText).map((item) => item.trim()).slice(0, 3)
+    : [];
+
+  return reasoning.length === 3 ? reasoning : null;
+}
+
+function policyIdentity(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const policy = raw as Partial<Policy>;
+  if (!isText(policy.company) || !isText(policy.policyName)) return null;
+  const code = isText(policy.code) ? policy.code : "";
+  return [policy.company, policy.policyName, code]
+    .map((value) => value.trim().toLowerCase())
+    .join("|");
+}
+
+function hasDuplicatePolicies(raw: unknown): boolean {
+  if (!Array.isArray(raw)) return false;
+  const identities = raw
+    .map(policyIdentity)
+    .filter((identity): identity is string => identity !== null);
+  return new Set(identities).size !== identities.length;
+}
+
 function validatePolicy(raw: unknown, index: number): Policy {
   if (!raw || typeof raw !== "object") {
     throw new Error(`第 ${index + 1} 筆保單格式錯誤`);
@@ -213,6 +249,30 @@ ${JSON.stringify(answers)}
 ${diseaseContext}
 
 ────────────────
+【資訊呈現偏好與資料契約】
+────────────────
+
+使用者的保單資訊呈現偏好是：「${answers.infoStyle ?? "不了解沒差"}」。
+
+如果偏好是「概括式」：
+- 只將 summary、reasoning、plans 的 name、subtitle、reason 與 plainSummary 寫得精簡、先講結論。
+- 不要在 summary、reasoning 或 plans 重複列出大段條款細節。
+- policies 仍然必須遵守下方完整 JSON schema，不能因為概括式而省略欄位或改變欄位型別。
+
+如果偏好是「列舉式」：
+- summary 最多 3 個重點，以「一、」「二、」「三、」開頭。
+- 每個 reasoning 最多 2 個短句；plans 的 subtitle 與 reason 各自最多 2 個短句。
+- 只列出與使用者需求最相關的差異，不要複製 policies 的完整欄位內容；policies 的 JSON schema 不變。
+
+「資訊呈現偏好」只控制文字的詳略，不控制資料是否存在。任何無法確認的 policy 欄位仍依「不知道資料時的規則」填入 X 或 ["X"]。
+
+無論使用者選擇哪一種保費偏好或資訊呈現偏好，reasoning 都必須是包含 3 個非空字串的 JSON 陣列：
+1. 對應使用者需求或偏好的理由。
+2. 對應方案層級或預算取捨的理由。
+3. 提醒正式條款與資料確認的理由。
+不可將 3 個理由合併成一個字串，也不可省略任何一筆。
+
+────────────────
 【你必須產生的資料】
 ────────────────
 
@@ -223,7 +283,10 @@ ${diseaseContext}
 3 個根據問卷產生的推薦理由。
 
 3. policies
-剛好 10 筆候選保單。
+必須產生剛好 8 筆候選保單；資料不足 8 筆時，不得虛構商品或引用程式內建資料，應重新要求 LLM 產生有效結果。
+
+每筆 policies 必須是不同的實際保險商品，不可以只改 id、描述或保費就重複同一商品。
+請以 company、policyName、code 交叉確認；同一商品只能出現一次。
 
 4. plans
 精簡版 lite、
@@ -588,7 +651,7 @@ premium 屬於必要資料。
 
 請改選其他有足夠資訊可以確認 premium 的候選商品。
 
-禁止為了湊滿 10 筆 policies 而自行創造保費。
+禁止為了湊滿 10 筆 policies 而自行創造商品或保費；資料不足時直接回傳較少的 policies。
 
 monthly 必須是 number。
 
@@ -681,9 +744,9 @@ plainSummary 必須使用一般消費者容易理解的繁體中文。
 【JSON 一致性規則】
 ────────────────
 
-1. policies 必須剛好 10 筆。
+1. policies 必須剛好 8 筆。
 
-2. id 必須依序為：
+2. id 必須依序編號為：
 
 p1
 p2
@@ -693,8 +756,6 @@ p5
 p6
 p7
 p8
-p9
-p10
 
 3. id 不可以重複。
 
@@ -740,62 +801,87 @@ full
 
 15. 不得假設前端會替你補值或修改資料。`;
 
-  const rawResponse =
-    await askInsuranceLLM(prompt);
-
-  const response =
-    extractJson(rawResponse);
-
-  if (!isText(response.summary)) {
-    throw new Error("LLM 回應缺少 summary");
-  }
-
-  if (
-    !Array.isArray(response.reasoning) ||
-    response.reasoning.length !== 3 ||
-    !response.reasoning.every(isText)
-  ) {
-    throw new Error(
-      "LLM reasoning 必須剛好有 3 筆",
-    );
-  }
-
-  if (
-    !Array.isArray(response.policies) ||
-    response.policies.length !== 10
-  ) {
-    throw new Error(
-      "LLM 必須回傳剛好 10 筆 policies",
-    );
-  }
-
-  const policies =
-    response.policies.map(
-      (policy, index) =>
-        validatePolicy(policy, index),
-    );
-
-  const policyIds = new Set(
-    policies.map((policy) => policy.id),
+  const request = (extraInstruction = "") => askInsuranceLLM(
+    `${prompt}\n\n${extraInstruction}`,
+    [],
+    {
+      jsonMode: true,
+      maxTokens: 24000,
+    },
   );
 
-  if (policyIds.size !== 10) {
-    throw new Error(
-      "LLM 回傳的 policy id 有重複",
+  const validateResponse = (response: LlmRecommendation) => {
+    if (!isText(response.summary)) {
+      throw new Error("LLM 回應缺少 summary");
+    }
+
+    const reasoning = normalizeReasoning(response.reasoning);
+    if (!reasoning) {
+      throw new Error(
+        "LLM reasoning 必須剛好有 3 筆",
+      );
+    }
+
+    if (
+      !Array.isArray(response.policies) ||
+      response.policies.length !== 8
+    ) {
+      throw new Error(
+        "LLM 必須回傳剛好 8 筆 policies",
+      );
+    }
+
+    const policies =
+      response.policies.map(
+        (policy, index) =>
+          validatePolicy(policy, index),
+      );
+
+    if (hasDuplicatePolicies(policies)) {
+      throw new Error("LLM 回傳了重複的保險商品，請再試一次");
+    }
+
+    const policyIds = new Set(
+      policies.map((policy) => policy.id),
     );
-  }
 
-  const plans = validatePlans(
-    response.plans,
-    policyIds,
-  );
+    if (policyIds.size !== policies.length) {
+      throw new Error(
+        "LLM 回傳的 policy id 有重複",
+      );
+    }
 
-  return {
-    summary: response.summary,
-    reasoning: response.reasoning as string[],
-    policies,
-    plans,
+    const plans = validatePlans(
+      response.plans,
+      policyIds,
+    );
+
+    return {
+      summary: response.summary,
+      reasoning,
+      policies,
+      plans,
+    };
   };
+
+  let lastError: unknown;
+  let instruction = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = extractJson(await request(instruction));
+      return validateResponse(response);
+    } catch (error) {
+      lastError = error;
+      instruction = `上一個回應無法通過資料驗證：${error instanceof Error ? error.message : "格式錯誤"}。
+請重新產生完整 JSON。所有 summary、reasoning、policies 與 plans 內容都必須由你生成，不得省略、補用或引用程式內建資料。reasoning 必須剛好 3 筆，policies 必須是 8 個不重複商品，plans 必須剛好 3 個。`;
+    }
+  }
+
+  throw new Error(
+    lastError instanceof Error
+      ? `LLM 連續 3 次無法產生有效保單資料：${lastError.message}`
+      : "LLM 連續 3 次無法產生有效保單資料",
+  );
 }
 
 export const recommendationsMonthly = (

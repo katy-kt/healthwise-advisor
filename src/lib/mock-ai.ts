@@ -6,6 +6,8 @@
  */
 import type { Answers, Policy } from "@/data/insurance";
 import { COMPARE_GROUPS, rowIsIdentical } from "@/data/insurance";
+import { askInsuranceLLM } from "@/lib/llm-client";
+import { jsonrepair } from "jsonrepair";
 
 export type Depth = "simple" | "normal" | "pro";
 
@@ -190,6 +192,103 @@ export function generateSuggestedQuestions(ctx: AssistantContext): SuggestedQues
   }
 
   return pool.slice(0, 3);
+}
+
+function parseSuggestedQuestions(text: string): unknown {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+  const candidates = [cleaned];
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start >= 0 && end > start) candidates.push(cleaned.slice(start, end + 1));
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      try {
+        return JSON.parse(jsonrepair(candidate));
+      } catch {
+        continue;
+      }
+    }
+  }
+  throw new Error("LLM 回傳的推薦問題格式錯誤");
+}
+
+function validateSuggestedQuestions(raw: unknown, ctx: AssistantContext): SuggestedQuestion[] {
+  if (!raw || typeof raw !== "object" || !Array.isArray((raw as { questions?: unknown }).questions)) {
+    throw new Error("LLM 未回傳 questions 陣列");
+  }
+
+  const validAnchors = new Set(ctx.comparisonDifferences.map((d) => `${d.groupId}:${d.rowId}`));
+  const questions = (raw as { questions: unknown[] }).questions
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item, index) => {
+      if (typeof item.text !== "string" || !item.text.trim()) {
+        throw new Error(`第 ${index + 1} 個推薦問題缺少 text`);
+      }
+      if (typeof item.why !== "string" || !item.why.trim()) {
+        throw new Error(`第 ${index + 1} 個推薦問題缺少 why`);
+      }
+      if (/(?:\bp\d+\b|rowId|groupId|anchor|JSON|欄位\s*ID)/i.test(`${item.text} ${item.why}`)) {
+        throw new Error(`第 ${index + 1} 個推薦問題包含內部資料格式`);
+      }
+      const anchor = typeof item.anchor === "string" && item.anchor.trim() ? item.anchor : undefined;
+      if (anchor && !validAnchors.has(anchor)) {
+        throw new Error(`第 ${index + 1} 個推薦問題的 anchor 無效`);
+      }
+      return {
+        id: uid(),
+        text: item.text.trim(),
+        why: item.why.trim(),
+        ...(anchor ? { anchor, anchorLabel: typeof item.anchorLabel === "string" ? item.anchorLabel : "查看相關差異" } : {}),
+      };
+    });
+
+  if (questions.length < 3) throw new Error("LLM 回傳的推薦問題不足 3 個");
+  return questions.slice(0, 3);
+}
+
+export async function generateSuggestedQuestionsWithLLM(ctx: AssistantContext): Promise<SuggestedQuestion[]> {
+  const policySummaries = ctx.selectedPolicies.map((policy) => ({
+    id: policy.id,
+    company: policy.company,
+    policyName: policy.policyName,
+    category: policy.category,
+    medicalType: policy.medicalType,
+    premium: policy.premium,
+    tags: policy.tags,
+  }));
+  const allowedAnchors = ctx.comparisonDifferences.map((d) => ({
+    anchor: `${d.groupId}:${d.rowId}`,
+    group: d.groupLabel,
+    row: d.rowLabel,
+    values: d.values,
+  }));
+  const prompt = `你是 HealthWise 的台灣保險比較助手。請根據保單摘要與真實比較差異，生成 3 個使用者最值得先問的個人化問題。
+
+規則：
+1. 問題要像真正理解使用者情況後提出的追問，不要照抄固定模板。
+2. 優先針對比較表中的實際商品差異，以及這些差異對使用者的影響。
+3. 不得捏造資料或做出沒有根據的理賠結論。
+4. 每題都要有 why，說明為何對這位使用者重要。
+5. anchor 只能從「合法比較差異」中選一個；若問題不需要對應表格，可省略 anchor。
+6. 問題與 why 必須使用自然的繁體中文，不得提到任何內部資料格式或技術識別資訊，例如 p1、p2、p3、policy id、rowId、groupId、anchor、JSON 或欄位 ID。
+7. 只回傳 JSON，不要 Markdown 或其他文字。
+
+回答偏好：${JSON.stringify(ctx.conversationPreference)}
+使用者問卷：${JSON.stringify(ctx.questionnaireAnswers)}
+保單摘要：${JSON.stringify(policySummaries)}
+合法比較差異：${JSON.stringify(allowedAnchors)}
+
+輸出格式：
+{"questions":[{"text":"問題","why":"推薦原因","anchor":"groupId:rowId","anchorLabel":"查看差異"}]}`;
+
+  const response = await askInsuranceLLM(prompt, [], { jsonMode: true, mode: "fast" });
+  return validateSuggestedQuestions(parseSuggestedQuestions(response), ctx);
 }
 
 /** Regenerates suggestions after the user adjusts the question style. */

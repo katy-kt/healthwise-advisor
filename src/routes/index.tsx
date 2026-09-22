@@ -29,7 +29,10 @@ function Index() {
   const selectPolicies = useInsuranceStore((state) => state.selectPolicies);
   const togglePolicySelection = useInsuranceStore((state) => state.togglePolicySelection);
   const availablePolicies = generatedPolicies.length ? generatedPolicies : MOCK_POLICIES;
-  const selectedPolicies = availablePolicies.filter((policy) => selectedPolicyIds.includes(policy.id));
+  const selectedPolicies = useMemo(
+    () => availablePolicies.filter((policy) => selectedPolicyIds.includes(policy.id)),
+    [availablePolicies, selectedPolicyIds],
+  );
 
   const handleSubmit = async () => {
     if (!answers.gender || !answers.ageConfirmed || !answers.budgetConfirmed) return;
@@ -119,7 +122,7 @@ function Index() {
                       onClick={() => togglePolicySelection(policy.id, !selected)}
                       disabled={!selected && selectedPolicyIds.length >= 8}
                     >
-                      {selected ? "移除" : "加入"} {policy.company} · {policy.code}
+                      {selected ? "移除" : "加入"} {policy.company} · {policy.policyName}
                     </Button>
                   );
                 })}

@@ -3,6 +3,7 @@ import {
   ArrowDownRight,
   ChevronDown,
   HelpCircle,
+  LoaderCircle,
   MessageCircle,
   Send,
   X,
@@ -21,6 +22,7 @@ import {
   type SuggestedQuestion,
   computeDifferences,
   generateSuggestedQuestions,
+  generateSuggestedQuestionsWithLLM,
   makeSystemMessage,
   makeUserMessage,
 } from "@/lib/mock-ai";
@@ -56,6 +58,7 @@ export function AiAssistant({
   });
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [questions, setQuestions] = useState<SuggestedQuestion[]>([]);
+  const [suggestionStatus, setSuggestionStatus] = useState<"idle" | "generating" | "llm" | "fallback">("idle");
   const [input, setInput] = useState("");
   const [depthMenuOpen, setDepthMenuOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(420);
@@ -66,6 +69,7 @@ export function AiAssistant({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousPolicyIds = useRef<string | null>(null);
+  const suggestionRequestId = useRef(0);
 
   const differences = useMemo(() => computeDifferences(selectedPolicies), [selectedPolicies]);
 
@@ -79,12 +83,27 @@ export function AiAssistant({
     [answers, selectedPolicies, differences, preference],
   );
 
-  // Proactive suggestions whenever the compared products or preference change.
   useEffect(() => {
+    const requestId = ++suggestionRequestId.current;
     if (selectedPolicies.length === 0) {
       setQuestions([]);
+      setSuggestionStatus("idle");
     } else {
       setQuestions(generateSuggestedQuestions(ctx));
+      setSuggestionStatus("generating");
+      void generateSuggestedQuestionsWithLLM(ctx)
+        .then((nextQuestions) => {
+          if (requestId === suggestionRequestId.current) {
+            setQuestions(nextQuestions);
+            setSuggestionStatus("llm");
+          }
+        })
+        .catch(() => {
+          if (requestId === suggestionRequestId.current) {
+            setQuestions(generateSuggestedQuestions(ctx));
+            setSuggestionStatus("fallback");
+          }
+        });
     }
     const ids = selectedPolicies.map((policy) => policy.id).sort().join(",");
     if (previousPolicyIds.current !== null && previousPolicyIds.current !== ids) {
@@ -98,7 +117,7 @@ export function AiAssistant({
       ]);
     }
     previousPolicyIds.current = ids;
-  }, [ctx, selectedPolicies.length]);
+  }, [ctx, selectedPolicies]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -177,7 +196,16 @@ export function AiAssistant({
         ...m,
         { id: Math.random().toString(36).slice(2), role: "assistant", content },
       ]);
-      setQuestions(generateSuggestedQuestions(ctx));
+      setSuggestionStatus("generating");
+      void generateSuggestedQuestionsWithLLM(ctx)
+        .then((nextQuestions) => {
+          setQuestions(nextQuestions);
+          setSuggestionStatus("llm");
+        })
+        .catch(() => {
+          setQuestions(generateSuggestedQuestions(ctx));
+          setSuggestionStatus("fallback");
+        });
     } catch (error) {
       const message = error instanceof Error ? error.message : "無法取得 AI 回覆";
       setMessages((m) => [...m, makeSystemMessage(`AI 暫時無法回覆：${message}`)]);
@@ -344,8 +372,22 @@ export function AiAssistant({
           <div className="space-y-2 pt-6">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <HelpCircle className="h-3.5 w-3.5" />
-              建議你問（依問卷 + 商品差異產生）
+              建議你問（依商品差異產生）
             </div>
+            {suggestionStatus === "generating" && (
+              <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                目前先顯示暫用問題，AI正在生成更個人化的推薦問題…
+              </div>
+            )}
+            {suggestionStatus === "fallback" && (
+              <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                AI目前暫時無法生成推薦問題，目前顯示的是系統暫用問題。
+              </div>
+            )}
+            {suggestionStatus === "llm" && (
+              <div className="text-[11px] text-muted-foreground">以上推薦問題由AI根據目前問卷與比較差異生成</div>
+            )}
             {questions.map((q) => (
               <div
                 key={q.id}
