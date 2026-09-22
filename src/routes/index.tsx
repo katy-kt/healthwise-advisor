@@ -1,109 +1,153 @@
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Shield, Sparkles, Users } from "lucide-react";
+import { Shield, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Accordion } from "@/components/ui/accordion";
-
+import { Button } from "@/components/ui/button";
+import { Questionnaire } from "@/components/insurance/Questionnaire";
+import { PlanResults } from "@/components/insurance/PlanResults";
+import { ComparisonMatrix } from "@/components/insurance/ComparisonMatrix";
+import { AiAssistant } from "@/components/insurance/AiAssistant";
+import { DEFAULT_ANSWERS, MOCK_POLICIES, buildPlans, type Answers, type Plan, type Policy } from "@/data/insurance";
+import { generateRecommendations } from "@/lib/recommendation-llm";
 import { useInsuranceStore } from "@/store/useInsuranceStore";
-import { MOCK_POLICIES, DISEASES } from "@/lib/constants";
 
-import { InsuranceForm } from "@/components/InsuranceForm";
-import { PolicyCard } from "@/components/PolicyCard";
-import { PolicyComparison } from "@/components/PolicyComparison";
-import { DualReimbursement } from "@/components/DualReimbursement";
-
-export const Route = createFileRoute("/")({
-  component: Index,
-});
+export const Route = createFileRoute("/")({ component: Index });
 
 function Index() {
-  // 只拿出在佈局層次需要知道的狀態
-  const submitted = useInsuranceStore(state => state.submitted);
-  const displayPolicies = useInsuranceStore(state => state.displayPolicies);
-  const aiSummary = useInsuranceStore(state => state.aiSummary);
-  const aiReasoning = useInsuranceStore(state => state.aiReasoning);
-  const selectedPolicyIds = useInsuranceStore(state => state.selectedPolicyIds);
-  
-  const gender = useInsuranceStore(state => state.gender);
-  const age = useInsuranceStore(state => state.age);
-  const disease = useInsuranceStore(state => state.disease);
-  
-  const activePolicies = displayPolicies.length > 0 ? displayPolicies : MOCK_POLICIES;
-  const diseaseLabel = DISEASES.find(d => d.value === disease)?.label ?? "";
+  const [answers, setAnswers] = useState<Answers>({ ...DEFAULT_ANSWERS });
+  const [completed, setCompleted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [generatedPolicies, setGeneratedPolicies] = useState<Policy[]>([]);
+  const [generatedPlans, setGeneratedPlans] = useState<Plan[]>([]);
+  const [highlightAnchor, setHighlightAnchor] = useState<{ anchor: string; nonce: number } | null>(null);
+  const plans = useMemo(
+    () => (completed ? (generatedPolicies.length ? generatedPlans : buildPlans(answers)) : []),
+    [answers, completed, generatedPolicies, generatedPlans],
+  );
+  const selectedPolicyIds = useInsuranceStore((state) => state.selectedPolicyIds);
+  const selectPolicies = useInsuranceStore((state) => state.selectPolicies);
+  const togglePolicySelection = useInsuranceStore((state) => state.togglePolicySelection);
+  const availablePolicies = generatedPolicies.length ? generatedPolicies : MOCK_POLICIES;
+  const selectedPolicies = useMemo(
+    () => availablePolicies.filter((policy) => selectedPolicyIds.includes(policy.id)),
+    [availablePolicies, selectedPolicyIds],
+  );
+
+  const handleSubmit = async () => {
+    if (!answers.gender || !answers.ageConfirmed || !answers.budgetConfirmed) return;
+    setLoading(true);
+    setCompleted(false);
+    setGeneratedPolicies([]);
+    setGeneratedPlans([]);
+    selectPolicies([]);
+    try {
+      const result = await generateRecommendations(answers);
+      setGeneratedPolicies(result.policies);
+      setGeneratedPlans(result.plans);
+      setCompleted(true);
+      toast.success(`已產出 ${result.policies.length} 筆推薦保單`);
+      setTimeout(() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" }), 100);
+    } catch (error) {
+      toast.error("推薦方案產出失敗", {
+        description: error instanceof Error ? error.message : "請確認後端 LLM 服務是否正在執行",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompare = (plan: Plan) => {
+    selectPolicies(plan.items.map((item) => item.policyId));
+    setTimeout(() => document.getElementById("comparison")?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border/60 bg-card/70 backdrop-blur-md sticky top-0 z-40">
-        <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-card/70 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl grid place-items-center bg-[image:var(--gradient-hero)] text-primary-foreground shadow-[var(--shadow-soft)]">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-[image:var(--gradient-hero)] text-primary-foreground shadow-[var(--shadow-soft)]">
               <Shield className="h-5 w-5" />
             </div>
             <div>
-              <div className="font-semibold tracking-tight text-foreground">InsuranceMatch AI</div>
-              <div className="text-[11px] text-muted-foreground -mt-0.5">智慧保險推薦系統</div>
+              <div className="font-semibold tracking-tight">InsuranceMatch AI</div>
+              <div className="-mt-0.5 text-[11px] text-muted-foreground">智慧保險推薦系統</div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* 不再需要傳入任何 props！ */}
-      <InsuranceForm />
-
-      {submitted && (
-        <section id="results" className="mx-auto max-w-7xl px-4 pb-16 animate-in fade-in duration-500">
-          <Tabs defaultValue="recommendations" className="w-full">
-            <TabsList className="grid w-full sm:w-auto sm:inline-grid grid-cols-2 mb-6">
-              <TabsTrigger value="recommendations"><Shield className="h-4 w-4 mr-1.5" />推薦清單</TabsTrigger>
-              <TabsTrigger value="dual"><Sparkles className="h-4 w-4 mr-1.5" />雙實付智慧推薦</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="recommendations" className="space-y-6">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-bold tracking-tight">10 張精選保單</h2>
-                  <p className="text-sm text-muted-foreground mt-1">根據 {gender === "male" ? "男性" : "女性"} · {age} 歲 · {diseaseLabel} 產生</p>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  已選擇 <span className="text-primary font-semibold">{selectedPolicyIds.length}</span> / 3
-                </div>
-              </div>
-
-              {aiSummary && (
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                    <Sparkles className="h-4 w-4" /> AI 推薦摘要
-                  </div>
-                  <p className="text-sm leading-7 text-foreground">{aiSummary}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {aiReasoning.map((reason, idx) => (
-                      <Badge key={`${reason}-${idx}`} variant="secondary" className="bg-background">{reason}</Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Accordion type="multiple" className="space-y-3">
-                {activePolicies.map((p, idx) => (
-                  <PolicyCard key={p.id} policy={p} index={idx} />
-                ))}
-              </Accordion>
-
-              {/* 不再需要傳入 props！ */}
-              <PolicyComparison />
-            </TabsContent>
-
-            <TabsContent value="dual">
-              {/* 不再需要傳入 props！ */}
-              <DualReimbursement />
-            </TabsContent>
-          </Tabs>
+      <main>
+        <section className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-[image:var(--gradient-hero)] opacity-[0.08]" aria-hidden />
+          <div className="relative mx-auto max-w-5xl px-4 py-10 md:py-16">
+            <div className="mb-8 text-center">
+              <h1 className="text-3xl font-bold tracking-tight md:text-5xl">
+                找到<span className="bg-[image:var(--gradient-hero)] bg-clip-text text-transparent">真正適合你</span>的健康保險
+              </h1>
+              <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">完成五個步驟，我們會依照您實際提供的資料，在預算內整理三種保障策略。</p>
+            </div>
+            <Questionnaire answers={answers} setAnswers={setAnswers} onSubmit={handleSubmit} loading={loading} />
+          </div>
         </section>
+
+        {completed && (
+          <section id="plans" className="mx-auto max-w-5xl scroll-mt-24 px-4 py-12">
+            <PlanResults plans={plans} policies={availablePolicies} budget={answers.budget} onCompare={handleCompare} />
+          </section>
+        )}
+
+        {completed && (
+          <section className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16">
+            <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-soft)]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="font-semibold">商品比較</h2>
+                  <p className="text-sm text-muted-foreground">已選 {selectedPolicies.length} 款商品 · 最多可比較 8 款</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" })}>
+                  返回推薦結果
+                </Button>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {availablePolicies.map((policy) => {
+                  const selected = selectedPolicyIds.includes(policy.id);
+                  return (
+                    <Button
+                      key={policy.id}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      onClick={() => togglePolicySelection(policy.id, !selected)}
+                      disabled={!selected && selectedPolicyIds.length >= 8}
+                    >
+                      {selected ? "移除" : "加入"} {policy.company} · {policy.policyName}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <ComparisonMatrix
+              policies={selectedPolicies}
+              onRemove={(id) => togglePolicySelection(id, false)}
+              highlightAnchor={highlightAnchor}
+            />
+          </section>
+        )}
+      </main>
+
+      {completed && (
+        <AiAssistant
+          answers={answers}
+          selectedPolicies={selectedPolicies}
+          onViewDifference={(anchor) => setHighlightAnchor({ anchor, nonce: Date.now() })}
+        />
       )}
 
       <footer className="border-t border-border/60 bg-card/50">
-        <div className="mx-auto max-w-7xl px-4 py-6 text-xs text-muted-foreground flex flex-wrap gap-2 justify-between">
-          <div className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> 為大學生 & 新鮮人設計</div>
+        <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />個人化保險規劃工具</div>
         </div>
       </footer>
     </div>

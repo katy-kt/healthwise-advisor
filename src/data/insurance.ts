@@ -281,30 +281,34 @@ export const policyById = (id: string) => MOCK_POLICIES.find((p) => p.id === id)
 
 export interface Answers {
   age: number;
-  gender: Gender;
-  identity: string;
-  income: string;
+  ageConfirmed: boolean;
+  gender: Gender | null;
+  identity: string | null;
+  income: string | null;
   risks: string[];
-  mortgage: string;
-  dependents: string;
+  mortgage: string | null;
+  dependents: string | null;
   existing: string[];
   budget: number;
-  preference: string;
-  infoStyle: string;
+  budgetConfirmed: boolean;
+  preference: string | null;
+  infoStyle: string | null;
 }
 
 export const DEFAULT_ANSWERS: Answers = {
   age: 21,
-  gender: "female",
-  identity: "學生",
-  income: "50萬以下",
-  risks: ["重大疾病", "意外受傷", "財產損失"],
-  mortgage: "沒有",
-  dependents: "沒有",
-  existing: ["完全沒有"],
+  ageConfirmed: false,
+  gender: null,
+  identity: null,
+  income: null,
+  risks: [],
+  mortgage: null,
+  dependents: null,
+  existing: [],
   budget: 3500,
-  preference: "⚖️ 均衡",
-  infoStyle: "概括式",
+  budgetConfirmed: false,
+  preference: null,
+  infoStyle: null,
 };
 
 export const IDENTITIES = [
@@ -513,7 +517,7 @@ const identityPhrase = (a: Answers) =>
     ? "學生族群"
     : a.identity === "已婚有小孩"
       ? "有小孩的家庭"
-      : a.identity;
+      : (a.identity ?? "使用者");
 
 const hasNoInsurance = (a: Answers) =>
   a.existing.length === 0 || a.existing.includes("完全沒有") || a.existing.includes("不確定");
@@ -544,7 +548,7 @@ const CANDIDATES: Candidate[] = [
     priority: 3,
     risks: ["意外受傷", "身故後家人生活"],
     reason: (a) =>
-      `您把「意外受傷」列為主要擔心風險${a.dependents === "沒有" ? "" : "，且家中有需要扶養的人"}，本張含意外身故與失能一次金並提供交通事故加倍給付。`,
+      `${a.risks.includes("意外受傷") ? "您把意外受傷列為主要擔心風險" : "此方案以意外保障補足日常突發風險"}${a.dependents === "有需要撫養的人" ? "，且家中有需要扶養的人" : ""}，本張含意外身故與失能一次金並提供交通事故加倍給付。`,
   },
   {
     policyId: "p8",
@@ -553,7 +557,7 @@ const CANDIDATES: Candidate[] = [
     priority: 3,
     risks: ["重大疾病"],
     reason: (a) =>
-      `您最擔心重大疾病，而 ${a.age} 歲的一年期癌症險費率仍低，可用有限預算先取得癌症住院與手術保障，未來預算提高再轉換終身型。`,
+      `${a.risks.includes("重大疾病") ? "您已將重大疾病列為主要擔心風險" : "此方案加入重大疾病的基礎防護"}，而 ${a.age} 歲的一年期癌症險費率仍低，可用有限預算先取得癌症住院與手術保障。`,
   },
   {
     policyId: "p1",
@@ -580,7 +584,7 @@ const CANDIDATES: Candidate[] = [
     priority: 5,
     risks: ["住院醫療花費"],
     reason: (a) =>
-      `以較低保費補上住院期間的生活雜支與收入缺口，與實支實付互補；符合您「${a.preference.replace(/^[^\u4e00-\u9fa5]+/, "")}」的偏好。`,
+      `以較低保費補上住院期間的生活雜支與收入缺口，與實支實付互補；符合您「${a.preference?.replace(/^[^\u4e00-\u9fa5]+/, "") ?? "已選擇"}」的偏好。`,
   },
   {
     policyId: "p4",
@@ -637,8 +641,8 @@ const TIER_META: Record<PlanTier, { name: string; subtitle: string; ratio: numbe
 function scoreCandidate(c: Candidate, a: Answers) {
   let score = c.priority;
   if (c.risks.some((r) => a.risks.includes(r))) score -= 1.5;
-  if (a.preference.includes("保費便宜")) score += c.monthly / 600;
-  if (a.preference.includes("保障完整")) score -= c.monthly / 1600;
+  if (a.preference?.includes("保費便宜")) score += c.monthly / 600;
+  if (a.preference?.includes("保障完整")) score -= c.monthly / 1600;
   // avoid duplicating what the user already owns
   const owned: Record<string, string> = {
     實支實付: "實支實付",
@@ -660,7 +664,7 @@ function buildPlan(tier: PlanTier, a: Answers): Plan {
   const picked: Candidate[] = [];
   let total = 0;
   for (const c of ranked) {
-    if (picked.length >= MAX_COMPARE) break;
+    if (picked.length >= 5) break;
     if (total + c.monthly > cap) continue;
     picked.push(c);
     total += c.monthly;

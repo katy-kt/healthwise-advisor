@@ -4,9 +4,9 @@ import { CheckCircle2, Layers, Scale, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type Plan, type PlanTier, PLANS, planMonthly, policyById } from "@/data/insurance";
+import { type Plan, type PlanTier, type Policy, PLANS, planMonthly } from "@/data/insurance";
 
-function PlanCard({ plan, onCompare }: { plan: Plan; onCompare: (p: Plan) => void }) {
+function PlanCard({ plan, policies, onCompare }: { plan: Plan; policies: Policy[]; onCompare: (p: Plan) => void }) {
   const monthly = planMonthly(plan);
   const required = plan.items.filter((i) => i.level === "必備").length;
   const suggested = plan.items.length - required;
@@ -27,7 +27,7 @@ function PlanCard({ plan, onCompare }: { plan: Plan; onCompare: (p: Plan) => voi
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Layers className="h-4 w-4 text-teal" />
-            <span className="font-semibold">{plan.items.length}</span> 個險種
+            <span className="font-semibold">{new Set(plan.items.map((item) => item.categoryLabel)).size}</span> 個險種
           </div>
           <div className="flex items-center gap-2 text-sm">
             <CheckCircle2 className="h-4 w-4 text-success" />
@@ -39,7 +39,8 @@ function PlanCard({ plan, onCompare }: { plan: Plan; onCompare: (p: Plan) => voi
 
       <div className="space-y-3">
         {plan.items.map((item) => {
-          const p = policyById(item.policyId);
+          const p = policies.find((policy) => policy.id === item.policyId);
+          if (!p) return null;
           return (
             <div
               key={`${plan.tier}-${item.policyId}`}
@@ -96,10 +97,12 @@ function PlanCard({ plan, onCompare }: { plan: Plan; onCompare: (p: Plan) => voi
 export function PlanResults({
   onCompare,
   plans = PLANS,
+  policies,
   budget,
 }: {
   onCompare: (plan: Plan) => void;
   plans?: Plan[];
+  policies: Policy[];
   budget?: number;
 }) {
   const [tier, setTier] = useState<PlanTier>("standard");
@@ -107,7 +110,6 @@ export function PlanResults({
   return (
     <div className="space-y-5">
       <div>
-        <Badge className="bg-teal/15 text-teal border-teal/30 mb-2">Step 2 · 個人化方案</Badge>
         <h2 className="text-2xl font-bold tracking-tight">根據您的回答產出 3 個方案</h2>
         <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
           <Wallet className="h-4 w-4" />
@@ -126,7 +128,7 @@ export function PlanResults({
         </TabsList>
         {plans.map((p) => (
           <TabsContent key={p.tier} value={p.tier} className="animate-in fade-in duration-300">
-            <PlanCard plan={p} onCompare={onCompare} />
+            <PlanCard plan={p} policies={policies} onCompare={onCompare} />
           </TabsContent>
         ))}
       </Tabs>

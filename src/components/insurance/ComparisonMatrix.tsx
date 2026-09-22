@@ -29,9 +29,18 @@ export const rowDomId = (groupId: string, rowId: string) => `cmp-${groupId}-${ro
 
 function Cell({ row, policy }: { row: CompareRow; policy: Policy }) {
   const v = row.get(policy);
-  if (v === undefined || (Array.isArray(v) && v.length === 0)) {
-    return <span className="text-muted-foreground">—</span>;
-  }
+  if (
+  v === undefined ||
+  v === null ||
+  v === "" ||
+  (Array.isArray(v) && v.length === 0)
+) {
+  return (
+    <span className="text-muted-foreground">
+      X
+    </span>
+  );
+}
 
   if (row.kind === "payoutBadge") {
     const meta = PAYOUT_META[policy.payoutStandard];
@@ -82,19 +91,29 @@ function Cell({ row, policy }: { row: CompareRow; policy: Policy }) {
     );
   }
 
-  if (row.kind === "links") {
-    const url = String(v);
+if (row.kind === "links") {
+  const url = String(v);
+
+  if (url === "X") {
     return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-      >
-        查看文件 <ExternalLink className="h-3.5 w-3.5" />
-      </a>
+      <span className="text-muted-foreground">
+        X
+      </span>
     );
   }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+    >
+      查看文件{" "}
+      <ExternalLink className="h-3.5 w-3.5" />
+    </a>
+  );
+}
 
   return <span className="text-sm leading-relaxed">{String(v)}</span>;
 }
@@ -189,7 +208,6 @@ export function ComparisonMatrix({
     <div id="comparison" className="animate-in fade-in slide-in-from-bottom-2 duration-500 mt-10">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
         <div>
-          <Badge className="bg-teal/15 text-teal border-teal/30 mb-2">Step 3 · 詳細比較矩陣</Badge>
           <h2 className="text-2xl font-bold tracking-tight">保單比較表</h2>
           <p className="text-sm text-muted-foreground mt-1">
             目前比較 {policies.length} 張保單 · 共 7 大類、

@@ -27,6 +27,7 @@ interface InsuranceState {
   setAge: (age: string) => void;
   setDisease: (disease: DiseaseKey) => void;
   togglePolicySelection: (id: string, checked: boolean) => void;
+  selectPolicies: (ids: string[]) => void;
   clearSelection: () => void;
   generateRecommendations: () => Promise<void>;
 }
@@ -52,9 +53,9 @@ export const useInsuranceStore = create<InsuranceState>((set, get) => ({
   togglePolicySelection: (id, checked) => {
     const { selectedPolicyIds } = get();
     if (checked) {
-      if (selectedPolicyIds.length >= 3) {
-        toast.warning("最多只能選擇 3 張保單進行比較", {
-          description: "Maximum 3 policies can be compared",
+      if (selectedPolicyIds.length >= 8) {
+        toast.warning("最多只能選擇 8 張保單進行比較", {
+          description: "Maximum 8 policies can be compared",
         });
         return;
       }
@@ -63,6 +64,8 @@ export const useInsuranceStore = create<InsuranceState>((set, get) => ({
       set({ selectedPolicyIds: selectedPolicyIds.filter((x) => x !== id) });
     }
   },
+
+  selectPolicies: (ids) => set({ selectedPolicyIds: [...new Set(ids)].slice(0, 8) }),
 
   clearSelection: () => set({ selectedPolicyIds: [] }),
 
