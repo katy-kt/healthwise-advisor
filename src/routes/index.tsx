@@ -8,7 +8,7 @@ import { Questionnaire } from "@/components/insurance/Questionnaire";
 import { PlanResults } from "@/components/insurance/PlanResults";
 import { ComparisonMatrix } from "@/components/insurance/ComparisonMatrix";
 import { AiAssistant } from "@/components/insurance/AiAssistant";
-import { DEFAULT_ANSWERS, MOCK_POLICIES, buildPlans, type Answers, type Plan, type Policy } from "@/data/insurance";
+import { DEFAULT_ANSWERS, MAX_COMPARE, MOCK_POLICIES, buildPlans, type Answers, type Plan, type Policy } from "@/data/insurance";
 import { generateRecommendations } from "@/lib/recommendation-llm";
 import { useInsuranceStore } from "@/store/useInsuranceStore";
 
@@ -42,7 +42,14 @@ function Index() {
     setGeneratedPlans([]);
     selectPolicies([]);
     try {
-      const result = await generateRecommendations(answers);
+      const result = await generateRecommendations(answers, {
+        onRetry: (errorMessage, nextAttempt, totalAttempts) => {
+          toast.error("推薦保單產出失敗", {
+            description: `${errorMessage}。將進行第 ${nextAttempt}/${totalAttempts} 次嘗試。`,
+            duration: 5000,
+          });
+        },
+      });
       setGeneratedPolicies(result.policies);
       setGeneratedPlans(result.plans);
       setCompleted(true);
@@ -50,7 +57,7 @@ function Index() {
       setTimeout(() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" }), 100);
     } catch (error) {
       toast.error("推薦方案產出失敗", {
-        description: error instanceof Error ? error.message : "請確認後端 LLM 服務是否正在執行",
+        description: error instanceof Error ? error.message : "請確認後端 AI 服務是否正在執行",
       });
     } finally {
       setLoading(false);
@@ -64,15 +71,15 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-card/70 backdrop-blur-md">
+      <header className="border-b border-border/60 bg-card/70">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-[image:var(--gradient-hero)] text-primary-foreground shadow-[var(--shadow-soft)]">
               <Shield className="h-5 w-5" />
             </div>
             <div>
-              <div className="font-semibold tracking-tight">InsuranceMatch AI</div>
-              <div className="-mt-0.5 text-[11px] text-muted-foreground">智慧保險推薦系統</div>
+              <div className="font-semibold tracking-tight">InsurMatch</div>
+              <div className="-mt-0.5 text-[11px] text-muted-foreground">智慧保險比較與主動決策輔助系統</div>
             </div>
           </div>
         </div>
@@ -104,7 +111,7 @@ function Index() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="font-semibold">商品比較</h2>
-                  <p className="text-sm text-muted-foreground">已選 {selectedPolicies.length} 款商品 · 最多可比較 8 款</p>
+                  <p className="text-sm text-muted-foreground">已選 {selectedPolicies.length} 款商品 · 最多可比較 {MAX_COMPARE} 款</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" })}>
                   返回推薦結果
@@ -120,7 +127,7 @@ function Index() {
                       size="sm"
                       variant={selected ? "default" : "outline"}
                       onClick={() => togglePolicySelection(policy.id, !selected)}
-                      disabled={!selected && selectedPolicyIds.length >= 8}
+                      disabled={!selected && selectedPolicyIds.length >= MAX_COMPARE}
                     >
                       {selected ? "移除" : "加入"} {policy.company} · {policy.policyName}
                     </Button>

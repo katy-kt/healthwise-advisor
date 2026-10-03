@@ -27,15 +27,13 @@ export interface Policy {
   payoutAmount: string;
   payoutRatio: string;
   payoutStandard: "guaranteed" | "conditional" | "consult";
-  flagged?: { source: string; note: string };
   /* ---- extended (optional) detail fields for the comparison matrix ---- */
-  approvalNumber?: string;
   status?: string;
   premiumRange?: string;
   paymentPeriod?: string;
   coveragePeriod?: string;
   mainOrRider?: string;
-  requiresMainPolicy?: string;
+  requiresMainPolicy?: string | boolean;
   covers?: string[];
   payoutItems?: string[];
   exclusions?: string[];
@@ -52,7 +50,7 @@ export interface Policy {
   healthRestrictions?: string;
   payoutLimit?: string;
   payoutMethod?: string;
-  isReimbursement?: string;
+  isReimbursement?: string | boolean;
   receiptType?: string;
   surgeryBenefit?: string;
   hospitalBenefit?: string;
@@ -62,11 +60,6 @@ export interface Policy {
   cons?: string[];
   suitableFor?: string;
   notSuitableFor?: string;
-  policyDocumentUrl?: string;
-  productDocumentUrl?: string;
-  officialProductUrl?: string;
-  dataSource?: string;
-  lastUpdated?: string;
 }
 
 export const MAX_COMPARE = 8;
@@ -110,10 +103,6 @@ export const MOCK_POLICIES: Policy[] = [
     payoutAmount: "NT$ 1,000,000",
     payoutRatio: "100%",
     payoutStandard: "guaranteed",
-    flagged: {
-      source: "Dcard 保險版 2024/06 討論串",
-      note: "多名用戶反映理賠審核期較長，部分標靶藥物需附加證明。",
-    },
   },
   {
     id: "p3",
@@ -161,10 +150,6 @@ export const MOCK_POLICIES: Policy[] = [
     payoutAmount: "NT$ 800,000",
     payoutRatio: "100%",
     payoutStandard: "guaranteed",
-    flagged: {
-      source: "PTT insurance 版 2023 熱門文",
-      note: "早期版本條款對「心血管重大傷病」定義較嚴格，需諮詢最新版本。",
-    },
   },
   {
     id: "p6",
@@ -241,10 +226,6 @@ export const MOCK_POLICIES: Policy[] = [
     payoutAmount: "NT$ 2,000 / 日",
     payoutRatio: "75%",
     payoutStandard: "consult",
-    flagged: {
-      source: "Mobile01 保險討論區",
-      note: "部分用戶反映客服回應速度較慢，理賠文件要求較繁瑣。",
-    },
   },
 ];
 
@@ -296,8 +277,8 @@ export interface Answers {
 }
 
 export const DEFAULT_ANSWERS: Answers = {
-  age: 21,
-  ageConfirmed: false,
+  age: 30,
+  ageConfirmed: true,
   gender: null,
   identity: null,
   income: null,
@@ -306,7 +287,7 @@ export const DEFAULT_ANSWERS: Answers = {
   dependents: null,
   existing: [],
   budget: 3500,
-  budgetConfirmed: false,
+  budgetConfirmed: true,
   preference: null,
   infoStyle: null,
 };
@@ -695,7 +676,7 @@ export const buildPlans = (a: Answers): Plan[] =>
 
 /* ---------------- Detailed comparison matrix schema ---------------- */
 
-export type CellKind = "text" | "badges" | "list" | "payoutBadge" | "premium" | "links";
+export type CellKind = "text" | "badges" | "list" | "payoutBadge" | "premium";
 
 export interface CompareRow {
   id: string;
@@ -717,6 +698,9 @@ const t = (id: string, label: string, get: (p: Policy) => string | undefined): C
   kind: "text",
   get,
 });
+
+export const yesNoLabel = (value: string | boolean | undefined) =>
+  typeof value === "boolean" ? (value ? "是" : "否") : value;
 const l = (id: string, label: string, get: (p: Policy) => string[] | undefined): CompareRow => ({
   id,
   label,
@@ -734,7 +718,6 @@ export const COMPARE_GROUPS: CompareGroup[] = [
       t("code", "商品代碼", (p) => p.code),
       t("category", "險種", (p) => `${p.category} · ${p.medicalType}`),
       t("status", "商品狀態", (p) => p.status),
-      t("approval", "核准 / 核備 / 備查文號", (p) => p.approvalNumber),
     ],
   },
   {
@@ -746,7 +729,7 @@ export const COMPARE_GROUPS: CompareGroup[] = [
       t("paymentPeriod", "繳費年期", (p) => p.paymentPeriod),
       t("coveragePeriod", "保障期間", (p) => p.coveragePeriod),
       t("mainOrRider", "主約 / 附約", (p) => p.mainOrRider),
-      t("requiresMain", "是否需要搭配主約", (p) => p.requiresMainPolicy),
+      t("requiresMain", "是否需要搭配主約", (p) => yesNoLabel(p.requiresMainPolicy)),
     ],
   },
   {
@@ -783,7 +766,7 @@ export const COMPARE_GROUPS: CompareGroup[] = [
       t("payoutAmount", "理賠金額 / 給付上限", (p) => `${p.payoutAmount}｜${p.payoutLimit ?? "—"}`),
       t("payoutRatio", "賠償比例", (p) => p.payoutRatio),
       t("payoutMethod", "給付方式", (p) => p.payoutMethod),
-      t("isReimbursement", "是否實支實付", (p) => p.isReimbursement),
+      t("isReimbursement", "是否實支實付", (p) => yesNoLabel(p.isReimbursement)),
       t("receiptType", "正本 / 副本理賠", (p) => p.receiptType),
       t("surgery", "手術給付", (p) => p.surgeryBenefit),
       t("hospital", "住院給付", (p) => p.hospitalBenefit),
@@ -799,17 +782,6 @@ export const COMPARE_GROUPS: CompareGroup[] = [
       l("cons", "缺點", (p) => p.cons),
       t("suitableFor", "適合對象", (p) => p.suitableFor),
       t("notSuitableFor", "可能不適合對象", (p) => p.notSuitableFor),
-    ],
-  },
-  {
-    id: "docs",
-    label: "文件與來源",
-    rows: [
-      { id: "terms", label: "保單條款", kind: "links", get: (p) => p.policyDocumentUrl },
-      { id: "brochure", label: "商品文件", kind: "links", get: (p) => p.productDocumentUrl },
-      { id: "official", label: "官方商品頁", kind: "links", get: (p) => p.officialProductUrl },
-      t("dataSource", "資料來源", (p) => p.dataSource),
-      t("lastUpdated", "最後更新時間", (p) => p.lastUpdated),
     ],
   },
 ];

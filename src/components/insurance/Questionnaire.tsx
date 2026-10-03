@@ -189,7 +189,6 @@ export function Questionnaire({
                   {(answers.age < 18 || answers.age > 80 || Number.isNaN(answers.age)) && (
                     <p className="mt-2 text-xs text-destructive">請輸入 18 – 80 之間的有效年齡</p>
                   )}
-                  {!answers.ageConfirmed && <p className="mt-2 text-xs text-muted-foreground">顯示值僅供示範，請點選欄位確認</p>}
                 </div>
               </Field>
               <Field label="性別">
@@ -320,7 +319,6 @@ export function Questionnaire({
                     <span>NT$2,000</span>
                     <span>NT$30,000</span>
                   </div>
-                  {!answers.budgetConfirmed && <p className="mt-2 text-xs text-muted-foreground">顯示值僅供示範，請拖曳滑桿確認預算</p>}
                 </div>
               </Field>
             </>

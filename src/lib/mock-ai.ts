@@ -243,7 +243,7 @@ function validateSuggestedQuestions(raw: unknown, ctx: AssistantContext): Sugges
       return {
         id: uid(),
         text: item.text.trim(),
-        why: item.why.trim(),
+        why: item.why.trim().replaceAll("使用者", "您"),
         ...(anchor ? { anchor, anchorLabel: typeof item.anchorLabel === "string" ? item.anchorLabel : "查看相關差異" } : {}),
       };
     });
@@ -268,16 +268,18 @@ export async function generateSuggestedQuestionsWithLLM(ctx: AssistantContext): 
     row: d.rowLabel,
     values: d.values,
   }));
-  const prompt = `你是 HealthWise 的台灣保險比較助手。請根據保單摘要與真實比較差異，生成 3 個使用者最值得先問的個人化問題。
+  const prompt = `你是一個台灣保險比較助手。請根據保單摘要與真實比較差異，生成3個使用者最值得先問的個人化問題。
 
 規則：
-1. 問題要像真正理解使用者情況後提出的追問，不要照抄固定模板。
-2. 優先針對比較表中的實際商品差異，以及這些差異對使用者的影響。
-3. 不得捏造資料或做出沒有根據的理賠結論。
-4. 每題都要有 why，說明為何對這位使用者重要。
-5. anchor 只能從「合法比較差異」中選一個；若問題不需要對應表格，可省略 anchor。
-6. 問題與 why 必須使用自然的繁體中文，不得提到任何內部資料格式或技術識別資訊，例如 p1、p2、p3、policy id、rowId、groupId、anchor、JSON 或欄位 ID。
-7. 只回傳 JSON，不要 Markdown 或其他文字。
+1. 問題要像使用者正在向系統提問：優先使用「我／我的」帶入使用者自身情境，讓問題可以直接由使用者點選後送出；不要寫成「請分析使用者……」或「系統應該……」的旁觀式指令。
+2.不得要求使用者補充、上傳或提供資料；遇到資訊不足時，改為詢問應向保險公司、業務或正式條款確認什麼。
+3. 問題不要照抄固定模板。
+4. 優先針對比較表中的實際商品差異，以及這些差異對使用者的影響。
+5. 不得捏造資料或做出沒有根據的理賠結論。
+6. 每題都要有 why，說明為何對您重要；why 中提到使用者時，一律使用「您」。
+7. anchor 只能從「合法比較差異」中選一個；若問題不需要對應表格，可省略 anchor。
+8. 問題與 why 必須使用自然的繁體中文，不得提到任何內部資料格式或技術識別資訊，例如 p1、p2、p3、policy id、rowId、groupId、anchor、JSON 或欄位 ID。
+9. 只回傳 JSON，不要 Markdown 或其他文字。
 
 回答偏好：${JSON.stringify(ctx.conversationPreference)}
 使用者問卷：${JSON.stringify(ctx.questionnaireAnswers)}

@@ -42,6 +42,11 @@ const DEPTH_INSTRUCTIONS: Record<AssistantContext["conversationPreference"]["dep
   pro: `請使用較完整且精確的保險分析語氣：清楚區分商品差異、理賠條件、除外責任、等待期與續保規則。可以使用專業術語，但仍要以比較表中的資料為依據，不得自行推測。`,
 };
 
+const RETRIEVAL_QUESTION_PATTERN =
+  /條款|理賠|給付條件|除外責任|等待期|續保|解約|豁免保費|正本|副本|收據|疾病定義|手術定義|是否符合|能不能賠|會不會賠|賠不賠/;
+
+const needsPolicyRetrieval = (question: string) => RETRIEVAL_QUESTION_PATTERN.test(question);
+
 export function AiAssistant({
   answers,
   selectedPolicies,
@@ -66,6 +71,8 @@ export function AiAssistant({
   const resizeStart = useRef<{ x: number; width: number } | null>(null);
   const heightResizeStart = useRef<{ y: number; height: number } | null>(null);
   const [thinking, setThinking] = useState(false);
+  const [usingRetrieval, setUsingRetrieval] = useState(false);
+  const [showingRetrievalStatus, setShowingRetrievalStatus] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousPolicyIds = useRef<string | null>(null);
@@ -128,6 +135,16 @@ export function AiAssistant({
   }, [open, thinking]);
 
   useEffect(() => {
+    if (!thinking || !usingRetrieval) {
+      setShowingRetrievalStatus(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setShowingRetrievalStatus(true), 3000);
+    return () => window.clearTimeout(timer);
+  }, [thinking, usingRetrieval]);
+
+  useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       if (resizeStart.current) {
         const nextWidth = resizeStart.current.width - (event.clientX - resizeStart.current.x);
@@ -182,19 +199,30 @@ export function AiAssistant({
     setMessages((m) => [...m, makeUserMessage(question)]);
     setThinking(true);
     try {
+      const needsRetrieval = needsPolicyRetrieval(question);
+      setUsingRetrieval(needsRetrieval);
+      setShowingRetrievalStatus(false);
       const context = [
-        "你是 HealthWise 的保險比較助手。請只根據提供的問卷、保單與比較差異回答，不要捏造保險條款；若資料不足，請明確說明需要確認正式條款。回答使用繁體中文，清楚、具體、避免保證式的投保建議。",
+        "你是 HealthWise 的保險比較助手。請只根據提供的問卷、保單與比較差異回答，不要捏造保險條款；若資料不足，請明確說明需要確認正式條款。不要要求使用者補充、上傳或提供任何資料，改為建議使用者應向保險公司或業務確認的項目。回答使用繁體中文，清楚、具體、避免保證式的投保建議。",
+        needsRetrieval
+          ? "這是條款或理賠相關問題。請優先使用後端 LightRAG 檢索到的條款內容回答，只引用檢索結果中能確認的資訊，不要自行補充未被檢索內容支持的結論。"
+          : "這是一般比較問題，請優先根據提供的結構化保單與比較差異回答，不需要進行條款檢索。",
         `目前回答深度為「${DEPTH_LABEL[preference.depth]}」。請嚴格遵守以下寫作規則：${DEPTH_INSTRUCTIONS[preference.depth]}`,
         `問卷資料：${JSON.stringify(answers)}`,
         `目前比較保單：${JSON.stringify(selectedPolicies)}`,
         `比較差異：${JSON.stringify(differences)}`,
         `回答偏好：${JSON.stringify(preference)}`,
       ].join("\n");
-      const content = await askInsuranceLLM(`${context}\n\n使用者問題：${question}`, previousMessages);
+      const content = await askInsuranceLLM(`${context}\n\n使用者問題：${question}`, previousMessages, {
+        mode: needsRetrieval ? "hybrid" : "fast",
+      });
       if (!content.trim()) throw new Error("LLM 回傳空白內容");
+      const displayedContent = needsRetrieval
+        ? `${content.trim()}\n\n這是依據條款內容的資訊，不代表最終理賠決定。`
+        : content.trim();
       setMessages((m) => [
         ...m,
-        { id: Math.random().toString(36).slice(2), role: "assistant", content },
+        { id: Math.random().toString(36).slice(2), role: "assistant", content: displayedContent },
       ]);
       setSuggestionStatus("generating");
       void generateSuggestedQuestionsWithLLM(ctx)
@@ -211,6 +239,8 @@ export function AiAssistant({
       setMessages((m) => [...m, makeSystemMessage(`AI 暫時無法回覆：${message}`)]);
     } finally {
       setThinking(false);
+      setUsingRetrieval(false);
+      setShowingRetrievalStatus(false);
     }
   };
 
@@ -365,21 +395,26 @@ export function AiAssistant({
         )}
 
         {thinking && (
-          <div className="text-sm text-muted-foreground animate-pulse">正在分析比較表差異…</div>
+          <div className="text-sm text-muted-foreground animate-pulse">
+            {showingRetrievalStatus
+              ? "正在檢索相關條款…可能需要等待一段時間"
+              : "正在分析比較表差異…"}
+          </div>
         )}
 
-        {questions.length > 0 && !thinking && (
+        {suggestionStatus === "generating" && !thinking && (
+          <div className="flex items-center gap-2 pt-6 text-xs text-muted-foreground">
+            <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+            AI 正在生成個人化的推薦問題…
+          </div>
+        )}
+
+        {questions.length > 0 && !thinking && suggestionStatus !== "generating" && (
           <div className="space-y-2 pt-6">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <HelpCircle className="h-3.5 w-3.5" />
               建議你問（依商品差異產生）
             </div>
-            {suggestionStatus === "generating" && (
-              <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
-                目前先顯示暫用問題，AI正在生成更個人化的推薦問題…
-              </div>
-            )}
             {suggestionStatus === "fallback" && (
               <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                 AI目前暫時無法生成推薦問題，目前顯示的是系統暫用問題。
@@ -497,7 +532,7 @@ export function AiAssistant({
                 setInput("");
               }
             }}
-            placeholder="也可以直接問我任何比較問題…"
+            placeholder="也可以直接問我任何問題…"
             className="h-10"
           />
           <Button

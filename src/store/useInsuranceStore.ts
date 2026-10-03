@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { Gender, DiseaseKey, Policy } from "@/types";
 import { DISEASES } from "@/lib/constants";
+import { MAX_COMPARE } from "@/data/insurance";
 import { askInsuranceLLM } from "@/lib/llm-client";
 
 interface InsuranceState {
@@ -53,9 +54,9 @@ export const useInsuranceStore = create<InsuranceState>((set, get) => ({
   togglePolicySelection: (id, checked) => {
     const { selectedPolicyIds } = get();
     if (checked) {
-      if (selectedPolicyIds.length >= 8) {
-        toast.warning("最多只能選擇 8 張保單進行比較", {
-          description: "Maximum 8 policies can be compared",
+      if (selectedPolicyIds.length >= MAX_COMPARE) {
+        toast.warning(`最多只能選擇 ${MAX_COMPARE} 張保單進行比較`, {
+          description: `Maximum ${MAX_COMPARE} policies can be compared`,
         });
         return;
       }
@@ -65,7 +66,7 @@ export const useInsuranceStore = create<InsuranceState>((set, get) => ({
     }
   },
 
-  selectPolicies: (ids) => set({ selectedPolicyIds: [...new Set(ids)].slice(0, 8) }),
+  selectPolicies: (ids) => set({ selectedPolicyIds: [...new Set(ids)].slice(0, MAX_COMPARE) }),
 
   clearSelection: () => set({ selectedPolicyIds: [] }),
 

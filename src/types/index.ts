@@ -15,5 +15,4 @@ export interface Policy {
   payoutAmount: string;
   payoutRatio: string;
   payoutStandard: "guaranteed" | "conditional" | "consult";
-  flagged?: { source: string; note: string };
 }

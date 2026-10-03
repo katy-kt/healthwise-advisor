@@ -55,10 +55,6 @@ export const MOCK_POLICIES: Policy[] = [
     payoutAmount: "NT$ 1,000,000",
     payoutRatio: "100%",
     payoutStandard: "guaranteed",
-    flagged: {
-      source: "Dcard 保險版 2024/06 討論串",
-      note: "多名用戶反映理賠審核期較長，部分標靶藥物需附加證明。",
-    },
   },
   {
     id: "p3",
@@ -98,10 +94,6 @@ export const MOCK_POLICIES: Policy[] = [
     payoutAmount: "NT$ 800,000",
     payoutRatio: "100%",
     payoutStandard: "guaranteed",
-    flagged: {
-      source: "PTT insurance 版 2023 熱門文",
-      note: "早期版本條款對「心血管重大傷病」定義較嚴格，需諮詢最新版本。",
-    },
   },
   {
     id: "p6",
@@ -167,9 +159,5 @@ export const MOCK_POLICIES: Policy[] = [
     payoutAmount: "NT$ 2,000 / 日",
     payoutRatio: "75%",
     payoutStandard: "consult",
-    flagged: {
-      source: "Mobile01 保險討論區",
-      note: "部分用戶反映客服回應速度較慢，理賠文件要求較繁瑣。",
-    },
   },
 ];
