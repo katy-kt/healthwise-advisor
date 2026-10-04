@@ -193,7 +193,7 @@ export function ComparisonMatrix({
             <Switch id="hl-diff" checked={highlightDiff} onCheckedChange={setHighlightDiff} />
             <Label htmlFor="hl-diff" className="text-sm cursor-pointer flex items-center gap-1">
               <Highlighter className="h-3.5 w-3.5" />
-              差異高亮
+              差異標記
             </Label>
           </div>
           <Button variant="outline" size="sm" onClick={downloadExcel}>
